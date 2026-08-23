@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+build/
+.eggs/
+.venv/
+venv/
+
+# CTP 本地库二进制（体积大，按需从 release 下载）
+gateway/ctp/ctp_lib/linux/*.so
+gateway/ctp/ctp_lib/windows/*.dll
+
+# 运行时数据
+data/raw/**/*.bin
+logs/
+
+# 配置（含敏感信息）
+.env
+!.env.example
+
+# 前端
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
