@@ -1,16 +1,17 @@
 """
-监控路由：系统状态总览 + 行情快照 + ZMQ 状态
+监控路由：系统状态总览 + 行情快照 + ZMQ 状态 + Redis 状态
 
 数据来源：Redis
 - qt2:monitor:{asset_type}_sys_health  系统健康指标
 - qt2:state:{asset_type}_latest_tick   行情快照
 - qt2:monitor:zmq_stats                ZMQ 发布统计
+- Redis INFO 命令                      Redis 服务器指标
 """
 import json
 from fastapi import APIRouter
 
 from core.database.redis.redis_client import RedisClient
-from core.setting.setting import CTP_SUBSCRIBE_ASSET_TYPES, ZMQ_BIND_URL
+from core.setting.setting import CTP_SUBSCRIBE_ASSET_TYPES, ZMQ_BIND_URL, REDIS_HOST, REDIS_PORT, REDIS_DB
 
 
 router = APIRouter()
@@ -161,5 +162,77 @@ async def zmq_status():
                 result["connection_events"] = json.loads(events_str)
             except json.JSONDecodeError:
                 result["connection_events"] = []
+
+    return result
+
+
+@router.get("/redis")
+async def redis_status():
+    """Redis 服务器状态监控
+
+    通过 Redis INFO 命令获取服务器指标，
+    暴露：版本、运行时间、内存、连接数、命令统计、命中率、qt2 相关 key。
+    """
+    rc = RedisClient.get_client()
+    if rc is None:
+        return {"error": "Redis 不可用", "status": "offline"}
+
+    try:
+        info = rc.info()
+    except Exception as e:
+        return {"error": str(e), "status": "error"}
+
+    # 命中率
+    hits = info.get("keyspace_hits", 0)
+    misses = info.get("keyspace_misses", 0)
+    hit_rate = round(hits / (hits + misses) * 100, 2) if (hits + misses) > 0 else 0
+
+    # 运行时间格式化
+    uptime_sec = info.get("uptime_in_seconds", 0)
+    uptime_days = uptime_sec // 86400
+    uptime_hours = (uptime_sec % 86400) // 3600
+
+    # qt2 相关 key 详情
+    qt2_keys = []
+    try:
+        all_keys = rc.keys("qt2:*")
+        for key in all_keys:
+            key_str = key.decode() if isinstance(key, bytes) else key
+            key_type = rc.type(key).decode()
+            detail = {"key": key_str, "type": key_type}
+            if key_type == "hash":
+                detail["field_count"] = rc.hlen(key)
+            elif key_type == "string":
+                detail["size"] = len(rc.get(key) or b"")
+            elif key_type == "list":
+                detail["length"] = rc.llen(key)
+            qt2_keys.append(detail)
+    except Exception:
+        pass
+
+    result = {
+        "status": "online",
+        "host": f"{REDIS_HOST}:{REDIS_PORT}",
+        "db": REDIS_DB,
+        "version": info.get("redis_version", "unknown"),
+        "uptime_days": uptime_days,
+        "uptime_hours": uptime_hours,
+        "uptime_seconds": uptime_sec,
+        "connected_clients": info.get("connected_clients", 0),
+        "total_connections_received": info.get("total_connections_received", 0),
+        "used_memory": info.get("used_memory_human", "0"),
+        "used_memory_peak": info.get("used_memory_peak_human", "0"),
+        "used_memory_rss": info.get("used_memory_rss_human", "0"),
+        "total_commands_processed": info.get("total_commands_processed", 0),
+        "instantaneous_ops_per_sec": info.get("instantaneous_ops_per_sec", 0),
+        "keyspace_hits": hits,
+        "keyspace_misses": misses,
+        "hit_rate": hit_rate,
+        "evicted_keys": info.get("evicted_keys", 0),
+        "expired_keys": info.get("expired_keys", 0),
+        "db_size": info.get(f"db{REDIS_DB}", {}).get("keys", 0) if isinstance(info.get(f"db{REDIS_DB}"), dict) else 0,
+        "db_expires": info.get(f"db{REDIS_DB}", {}).get("expires", 0) if isinstance(info.get(f"db{REDIS_DB}"), dict) else 0,
+        "qt2_keys": qt2_keys,
+    }
 
     return result

@@ -6,6 +6,7 @@ export const getLatestTicks = (assetType: string, limit = 100) =>
   apiClient.get(`/monitor/ticks/${assetType}?limit=${limit}`);
 export const getAllTicks = (limit = 50) => apiClient.get(`/monitor/ticks?limit=${limit}`);
 export const getZmqStatus = () => apiClient.get('/monitor/zmq');
+export const getRedisStatus = () => apiClient.get('/monitor/redis');
 
 // ===== 合约 =====
 export const getFutureInstruments = (params?: {
@@ -31,6 +32,7 @@ export default {
   getLatestTicks,
   getAllTicks,
   getZmqStatus,
+  getRedisStatus,
   getFutureInstruments,
   getFutureProducts,
   getOptionInstruments,

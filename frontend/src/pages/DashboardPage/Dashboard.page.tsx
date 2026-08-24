@@ -30,6 +30,31 @@ interface ZmqStatus {
   note: string;
 }
 
+interface RedisStatus {
+  status: string;
+  host: string;
+  db: number;
+  version: string;
+  uptime_days: number;
+  uptime_hours: number;
+  uptime_seconds: number;
+  connected_clients: number;
+  total_connections_received: number;
+  used_memory: string;
+  used_memory_peak: string;
+  used_memory_rss: string;
+  total_commands_processed: number;
+  instantaneous_ops_per_sec: number;
+  keyspace_hits: number;
+  keyspace_misses: number;
+  hit_rate: number;
+  evicted_keys: number;
+  expired_keys: number;
+  db_size: number;
+  db_expires: number;
+  qt2_keys: Array<{ key: string; type: string; field_count?: number; size?: number; length?: number }>;
+}
+
 interface OverviewData {
   redis_ok: boolean;
   recorders: Record<string, RecorderStatus>;
@@ -38,17 +63,20 @@ interface OverviewData {
 const DashboardPage = () => {
   const [data, setData] = useState<OverviewData | null>(null);
   const [zmq, setZmq] = useState<ZmqStatus | null>(null);
+  const [redis, setRedis] = useState<RedisStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
-      const [overviewResult, zmqResult] = await Promise.all([
+      const [overviewResult, zmqResult, redisResult] = await Promise.all([
         api.getOverview(),
         api.getZmqStatus(),
+        api.getRedisStatus(),
       ]);
       setData(overviewResult as unknown as OverviewData);
       setZmq(zmqResult as unknown as ZmqStatus);
+      setRedis(redisResult as unknown as RedisStatus);
       setError(null);
     } catch (err: any) {
       setError(err.message);
@@ -201,6 +229,76 @@ const DashboardPage = () => {
               </CardBody>
             </Card>
           )}
+
+          {/* Redis 监控卡片 */}
+          {redis && (
+            <Card>
+              <CardBody>
+                <div className='mb-3 flex items-center justify-between'>
+                  <span className='text-lg font-bold'>Redis</span>
+                  <Badge
+                    color={redis.status === 'online' ? 'emerald' : 'red'}
+                    colorIntensity='500'>
+                    {redis.status}
+                  </Badge>
+                </div>
+                <div className='space-y-1 text-sm text-zinc-600 dark:text-zinc-400'>
+                  <div className='flex justify-between'>
+                    <span>版本</span>
+                    <span className='font-mono'>{redis.version}</span>
+                  </div>
+                  <div className='flex justify-between'>
+                    <span>运行时间</span>
+                    <span className='font-mono'>
+                      {redis.uptime_days}天{redis.uptime_hours}小时
+                    </span>
+                  </div>
+                  <div className='flex justify-between'>
+                    <span>内存使用</span>
+                    <span className='font-mono font-bold text-blue-500'>
+                      {redis.used_memory}
+                    </span>
+                  </div>
+                  <div className='flex justify-between'>
+                    <span>内存峰值</span>
+                    <span className='font-mono'>{redis.used_memory_peak}</span>
+                  </div>
+                  <div className='flex justify-between'>
+                    <span>连接客户端</span>
+                    <span className='font-mono font-bold text-green-500'>
+                      {redis.connected_clients}
+                    </span>
+                  </div>
+                  <div className='flex justify-between'>
+                    <span>OPS/s</span>
+                    <span className='font-mono'>{redis.instantaneous_ops_per_sec}</span>
+                  </div>
+                  <div className='flex justify-between'>
+                    <span>命中率</span>
+                    <span className='font-mono'>
+                      {redis.hit_rate}% ({redis.keyspace_hits}/{redis.keyspace_hits + redis.keyspace_misses})
+                    </span>
+                  </div>
+                  <div className='flex justify-between'>
+                    <span>总命令数</span>
+                    <span className='font-mono'>{formatNum(redis.total_commands_processed)}</span>
+                  </div>
+                  <div className='flex justify-between'>
+                    <span>DB{redis.db} Keys</span>
+                    <span className='font-mono'>
+                      {redis.db_size} (过期 {redis.db_expires})
+                    </span>
+                  </div>
+                  <div className='flex justify-between'>
+                    <span>淘汰/过期</span>
+                    <span className='font-mono'>
+                      {redis.evicted_keys} / {redis.expired_keys}
+                    </span>
+                  </div>
+                </div>
+              </CardBody>
+            </Card>
+          )}
         </div>
 
         {/* ZMQ 主题列表 */}
@@ -258,6 +356,43 @@ const DashboardPage = () => {
                 </table>
               </div>
               <div className='mt-2 text-xs text-zinc-400'>{zmq.note}</div>
+            </CardBody>
+          </Card>
+        )}
+
+        {/* Redis qt2 Keys 列表 */}
+        {redis && redis.qt2_keys && redis.qt2_keys.length > 0 && (
+          <Card className='mt-4'>
+            <CardBody>
+              <div className='mb-2 text-sm font-bold'>
+                Redis qt2 Keys ({redis.qt2_keys.length})
+              </div>
+              <div className='overflow-x-auto'>
+                <table className='w-full text-xs'>
+                  <thead className='border-b border-zinc-200 dark:border-zinc-700'>
+                    <tr className='text-left text-zinc-500'>
+                      <th className='px-2 py-1'>Key</th>
+                      <th className='px-2 py-1'>类型</th>
+                      <th className='px-2 py-1 text-right'>字段数/大小</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {redis.qt2_keys.map((k) => (
+                      <tr key={k.key} className='border-b border-zinc-100 dark:border-zinc-800'>
+                        <td className='px-2 py-1 font-mono'>{k.key}</td>
+                        <td className='px-2 py-1'>
+                          <span className='rounded bg-zinc-100 px-1.5 py-0.5 dark:bg-zinc-800'>
+                            {k.type}
+                          </span>
+                        </td>
+                        <td className='px-2 py-1 text-right font-mono'>
+                          {k.field_count ?? k.size ?? k.length ?? '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </CardBody>
           </Card>
         )}

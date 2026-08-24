@@ -9,7 +9,7 @@ from core.setting.setting import (
     GATEWAYS, CTP_MD_FRONT_ADDRESS, CTP_SUBSCRIBE_EXCHANGES, CTP_SUBSCRIBE_ASSET_TYPES,
     DB_TYPE, DB_HOST, DB_PORT, DB_USER, DB_DATABASE,
     REDIS_HOST, REDIS_PORT, REDIS_DB,
-    ZMQ_BIND_URL, DATA_DIR,
+    ZMQ_BIND_URL, DATA_DIR, APP_BRAND,
 )
 
 
@@ -52,5 +52,8 @@ async def get_config():
         },
         "data": {
             "dir": DATA_DIR,
+        },
+        "app": {
+            "brand": APP_BRAND,
         },
     }
