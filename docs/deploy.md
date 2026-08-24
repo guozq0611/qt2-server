@@ -62,8 +62,8 @@ pip install -r requirements.txt
 # 如有前端改动
 cd frontend && npm install && npm run build
 
-# 启动测试（端口 8011，避免和生产 8010 冲突）
-python run/run_api.py --host 0.0.0.0 --port 8011
+# 启动测试（端口 18011，避免和生产 18010 冲突）
+python run/run_api.py --host 0.0.0.0 --port 18011
 ```
 
 ### 3. 生产发布
@@ -110,8 +110,8 @@ cd frontend && npm install && npm run build && cd ..
 systemctl --user restart qt2-api
 
 # 6. 冒烟测试
-curl http://127.0.0.1:8010/health
-curl http://127.0.0.1:8010/api/instruments/summary
+curl http://127.0.0.1:18010/health
+curl http://127.0.0.1:18010/api/instruments/summary
 ```
 
 ## 回滚
@@ -152,8 +152,8 @@ systemctl --user restart qt2-api
 
 | 环境 | 访问方式 |
 |------|----------|
-| 生产 | `ssh -L 18010:127.0.0.1:8010 guozq0611@home01` → `http://127.0.0.1:18010` |
-| 测试 | `ssh -L 18011:127.0.0.1:8011 guozq0611@home01` → `http://127.0.0.1:18011` |
+| 生产 | `ssh -L 18010:127.0.0.1:18010 guozq0611@home01` → `http://127.0.0.1:18010` |
+| 测试 | `ssh -L 18011:127.0.0.1:18011 guozq0611@home01` → `http://127.0.0.1:18011` |
 
 ## 进程管理
 

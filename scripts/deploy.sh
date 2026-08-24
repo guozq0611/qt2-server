@@ -22,7 +22,7 @@ set -euo pipefail
 PROD_HOST="guozq0611@home01"
 PROD_PATH="~/prod/qt2-server"
 SERVICE_NAME="qt2-api"
-API_PORT=8010
+API_PORT=18010
 
 # ===== 参数解析 =====
 ACTION="deploy"
@@ -150,7 +150,7 @@ echo "--- 服务状态 ---"
 systemctl --user status qt2-api 2>&1 | head -6
 
 echo "--- 冒烟测试 ---"
-HEALTH=$(curl -s http://127.0.0.1:8010/health || echo "FAIL")
+HEALTH=$(curl -s http://127.0.0.1:18010/health || echo "FAIL")
 if [ "$HEALTH" = '{"status":"ok"}' ]; then
     echo "✓ health check passed"
 else
@@ -158,7 +158,7 @@ else
     exit 1
 fi
 
-INSTRUMENTS=$(curl -s http://127.0.0.1:8010/api/instruments/summary | python3 -c "import sys,json; print(json.load(sys.stdin).get('total','?'))" 2>/dev/null || echo "FAIL")
+INSTRUMENTS=$(curl -s http://127.0.0.1:18010/api/instruments/summary | python3 -c "import sys,json; print(json.load(sys.stdin).get('total','?'))" 2>/dev/null || echo "FAIL")
 if [ "$INSTRUMENTS" != "FAIL" ]; then
     echo "✓ instruments check passed (total=$INSTRUMENTS)"
 else
@@ -169,7 +169,7 @@ fi
 echo ""
 echo "============================================"
 echo "  部署完成: $TAG"
-echo "  访问: ssh -L 18010:127.0.0.1:8010 $USER@home01"
+echo "  访问: ssh -L 18010:127.0.0.1:18010 $USER@home01"
 echo "  浏览器: http://127.0.0.1:18010"
 echo "============================================"
 REMOTE_SCRIPT
