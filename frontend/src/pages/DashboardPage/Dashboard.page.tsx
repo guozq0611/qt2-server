@@ -14,6 +14,18 @@ interface RecorderStatus {
   last_update: string;
 }
 
+interface ZmqStatus {
+  bind_url: string;
+  socket_type: string;
+  hwm: number;
+  status: string;
+  total_published: number;
+  topics: string[];
+  publish_rate: number;
+  last_publish_time: string;
+  note: string;
+}
+
 interface OverviewData {
   redis_ok: boolean;
   recorders: Record<string, RecorderStatus>;
@@ -21,13 +33,18 @@ interface OverviewData {
 
 const DashboardPage = () => {
   const [data, setData] = useState<OverviewData | null>(null);
+  const [zmq, setZmq] = useState<ZmqStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
-      const result = await api.getOverview();
-      setData(result as unknown as OverviewData);
+      const [overviewResult, zmqResult] = await Promise.all([
+        api.getOverview(),
+        api.getZmqStatus(),
+      ]);
+      setData(overviewResult as unknown as OverviewData);
+      setZmq(zmqResult as unknown as ZmqStatus);
       setError(null);
     } catch (err: any) {
       setError(err.message);
@@ -45,6 +62,11 @@ const DashboardPage = () => {
   const formatTime = (ts: number) => {
     if (!ts) return '-';
     return new Date(ts * 1000).toLocaleTimeString();
+  };
+
+  const formatNum = (v: number) => {
+    if (!v) return '0';
+    return v.toLocaleString();
   };
 
   if (loading) {
@@ -97,7 +119,7 @@ const DashboardPage = () => {
                     </div>
                     <div className='flex justify-between'>
                       <span>已处理</span>
-                      <span className='font-mono'>{rec.total_processed}</span>
+                      <span className='font-mono'>{formatNum(rec.total_processed)}</span>
                     </div>
                     <div className='flex justify-between'>
                       <span>最新行情</span>
@@ -111,7 +133,78 @@ const DashboardPage = () => {
                 </CardBody>
               </Card>
             ))}
+
+          {/* ZMQ 监控卡片 */}
+          {zmq && (
+            <Card>
+              <CardBody>
+                <div className='mb-3 flex items-center justify-between'>
+                  <span className='text-lg font-bold'>ZMQ</span>
+                  <Badge
+                    color={
+                      zmq.status === 'active'
+                        ? 'emerald'
+                        : zmq.status === 'bound'
+                          ? 'blue'
+                          : zmq.status === 'closed'
+                            ? 'zinc'
+                            : 'red'
+                    }
+                    colorIntensity='500'>
+                    {zmq.status}
+                  </Badge>
+                </div>
+                <div className='space-y-1 text-sm text-zinc-600 dark:text-zinc-400'>
+                  <div className='flex justify-between'>
+                    <span>类型</span>
+                    <span className='font-mono'>{zmq.socket_type}</span>
+                  </div>
+                  <div className='flex justify-between'>
+                    <span>已发布</span>
+                    <span className='font-mono font-bold text-blue-500'>
+                      {formatNum(zmq.total_published)}
+                    </span>
+                  </div>
+                  <div className='flex justify-between'>
+                    <span>发布速率</span>
+                    <span className='font-mono'>{zmq.publish_rate.toFixed(1)}/s</span>
+                  </div>
+                  <div className='flex justify-between'>
+                    <span>HWM</span>
+                    <span className='font-mono'>{zmq.hwm}</span>
+                  </div>
+                  <div className='flex justify-between'>
+                    <span>绑定地址</span>
+                    <span className='font-mono text-xs'>{zmq.bind_url}</span>
+                  </div>
+                  <div className='flex justify-between'>
+                    <span>主题数</span>
+                    <span className='font-mono'>{zmq.topics.length}</span>
+                  </div>
+                </div>
+              </CardBody>
+            </Card>
+          )}
         </div>
+
+        {/* ZMQ 主题列表 */}
+        {zmq && zmq.topics.length > 0 && (
+          <Card className='mt-4'>
+            <CardBody>
+              <div className='mb-2 text-sm font-bold'>ZMQ 发布主题</div>
+              <div className='flex flex-wrap gap-2'>
+                {zmq.topics.map((topic) => (
+                  <span
+                    key={topic}
+                    className='rounded bg-zinc-100 px-2 py-1 font-mono text-xs dark:bg-zinc-800'>
+                    {topic}
+                  </span>
+                ))}
+              </div>
+              <div className='mt-2 text-xs text-zinc-400'>{zmq.note}</div>
+            </CardBody>
+          </Card>
+        )}
 
         {!data?.recorders || Object.keys(data.recorders).length === 0 ? (
           <Card>

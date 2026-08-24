@@ -1,15 +1,16 @@
 """
-监控路由：系统状态总览 + 行情快照
+监控路由：系统状态总览 + 行情快照 + ZMQ 状态
 
 数据来源：Redis
 - qt2:monitor:{asset_type}_sys_health  系统健康指标
 - qt2:state:{asset_type}_latest_tick   行情快照
+- qt2:monitor:zmq_stats                ZMQ 发布统计
 """
 import json
 from fastapi import APIRouter
 
 from core.database.redis.redis_client import RedisClient
-from core.setting.setting import CTP_SUBSCRIBE_ASSET_TYPES
+from core.setting.setting import CTP_SUBSCRIBE_ASSET_TYPES, ZMQ_BIND_URL
 
 
 router = APIRouter()
@@ -102,5 +103,48 @@ async def all_latest_ticks(limit: int = 50):
                 continue
         ticks = ticks[:limit]
         result[asset_type] = {"count": len(ticks), "ticks": ticks}
+
+    return result
+
+
+@router.get("/zmq")
+async def zmq_status():
+    """ZMQ 发布者状态监控
+
+    ZMQ PUB socket 不原生跟踪订阅者数量（协议设计如此），
+    但可以暴露绑定地址、HWM、已发布消息数等信息。
+    """
+    rc = RedisClient.get_client()
+    if rc is None:
+        return {"error": "Redis 不可用"}
+
+    # 从 Redis 读取 ZMQ 统计
+    zmq_key = "qt2:monitor:zmq_stats"
+    data = rc.hgetall(zmq_key)
+
+    # 从配置读取静态信息
+    result = {
+        "bind_url": ZMQ_BIND_URL,
+        "socket_type": "PUB",
+        "hwm": 2000,
+        "status": "unknown",
+        "total_published": 0,
+        "topics": [],
+        "publish_rate": 0,
+        "last_publish_time": "",
+        "note": "ZMQ PUB 协议不跟踪订阅者数量，total_published 为已发布消息总数",
+    }
+
+    if data:
+        result["status"] = data.get("status", "unknown")
+        result["total_published"] = int(data.get("total_published", 0))
+        result["last_publish_time"] = data.get("last_publish_time", "")
+        topics_str = data.get("topics", "")
+        if topics_str:
+            result["topics"] = topics_str.split(",")
+        try:
+            result["publish_rate"] = float(data.get("publish_rate", 0))
+        except (ValueError, TypeError):
+            result["publish_rate"] = 0
 
     return result
