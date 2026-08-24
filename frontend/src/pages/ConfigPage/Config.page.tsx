@@ -13,7 +13,8 @@ interface ConfigData {
     subscribe_exchanges: string[];
     subscribe_asset_types: string[];
   };
-  mysql: {
+  database: {
+    type: string;
     host: string;
     port: number;
     user: string;
@@ -117,28 +118,33 @@ const ConfigPage = () => {
             </CardBody>
           </Card>
 
-          {/* MySQL */}
+          {/* 数据库 */}
           <Card>
             <CardBody>
-              <div className='mb-3 text-lg font-bold'>MySQL</div>
+              <div className='mb-3 flex items-center justify-between'>
+                <span className='text-lg font-bold'>数据库</span>
+                <span className='rounded bg-blue-100 px-2 py-0.5 text-xs font-bold uppercase text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'>
+                  {config.database.type}
+                </span>
+              </div>
               <div className='space-y-2 text-sm'>
                 <div className='flex justify-between'>
                   <span className='text-zinc-500'>地址</span>
                   <span className='font-mono'>
-                    {config.mysql.host}:{config.mysql.port}
+                    {config.database.host}:{config.database.port}
                   </span>
                 </div>
                 <div className='flex justify-between'>
                   <span className='text-zinc-500'>数据库</span>
-                  <span className='font-mono'>{config.mysql.database}</span>
+                  <span className='font-mono'>{config.database.database}</span>
                 </div>
                 <div className='flex justify-between'>
                   <span className='text-zinc-500'>用户</span>
-                  <span className='font-mono'>{config.mysql.user}</span>
+                  <span className='font-mono'>{config.database.user}</span>
                 </div>
                 <div className='flex justify-between'>
                   <span className='text-zinc-500'>密码</span>
-                  <span className='font-mono'>{config.mysql.password}</span>
+                  <span className='font-mono'>{config.database.password}</span>
                 </div>
               </div>
             </CardBody>
