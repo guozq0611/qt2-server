@@ -23,6 +23,10 @@ interface ZmqStatus {
   topics: string[];
   publish_rate: number;
   last_publish_time: string;
+  subscriber_count: number;
+  total_connections: number;
+  total_disconnections: number;
+  connection_events: Array<{ type: string; addr: string; time: string }>;
   note: string;
 }
 
@@ -170,6 +174,18 @@ const DashboardPage = () => {
                     <span className='font-mono'>{zmq.publish_rate.toFixed(1)}/s</span>
                   </div>
                   <div className='flex justify-between'>
+                    <span>当前连接</span>
+                    <span className='font-mono font-bold text-green-500'>
+                      {zmq.subscriber_count}
+                    </span>
+                  </div>
+                  <div className='flex justify-between'>
+                    <span>历史连接</span>
+                    <span className='font-mono text-xs'>
+                      连 {zmq.total_connections} / 断 {zmq.total_disconnections}
+                    </span>
+                  </div>
+                  <div className='flex justify-between'>
                     <span>HWM</span>
                     <span className='font-mono'>{zmq.hwm}</span>
                   </div>
@@ -191,7 +207,7 @@ const DashboardPage = () => {
         {zmq && zmq.topics.length > 0 && (
           <Card className='mt-4'>
             <CardBody>
-              <div className='mb-2 text-sm font-bold'>ZMQ 发布主题</div>
+              <div className='mb-2 text-sm font-bold'>ZMQ 发布主题 ({zmq.topics.length})</div>
               <div className='flex flex-wrap gap-2'>
                 {zmq.topics.map((topic) => (
                   <span
@@ -200,6 +216,46 @@ const DashboardPage = () => {
                     {topic}
                   </span>
                 ))}
+              </div>
+            </CardBody>
+          </Card>
+        )}
+
+        {/* ZMQ 连接事件 */}
+        {zmq && zmq.connection_events && zmq.connection_events.length > 0 && (
+          <Card className='mt-4'>
+            <CardBody>
+              <div className='mb-2 text-sm font-bold'>
+                ZMQ 连接事件 (当前 {zmq.subscriber_count} 个订阅者)
+              </div>
+              <div className='overflow-x-auto'>
+                <table className='w-full text-xs'>
+                  <thead className='border-b border-zinc-200 dark:border-zinc-700'>
+                    <tr className='text-left text-zinc-500'>
+                      <th className='px-2 py-1'>时间</th>
+                      <th className='px-2 py-1'>事件</th>
+                      <th className='px-2 py-1'>客户端地址</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...zmq.connection_events].reverse().map((evt, i) => (
+                      <tr key={i} className='border-b border-zinc-100 dark:border-zinc-800'>
+                        <td className='px-2 py-1 font-mono'>{evt.time}</td>
+                        <td className='px-2 py-1'>
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-xs ${
+                              evt.type === 'CONNECTED'
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                                : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'
+                            }`}>
+                            {evt.type}
+                          </span>
+                        </td>
+                        <td className='px-2 py-1 font-mono'>{evt.addr}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
               <div className='mt-2 text-xs text-zinc-400'>{zmq.note}</div>
             </CardBody>

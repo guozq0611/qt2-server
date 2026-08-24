@@ -111,8 +111,8 @@ async def all_latest_ticks(limit: int = 50):
 async def zmq_status():
     """ZMQ 发布者状态监控
 
-    ZMQ PUB socket 不原生跟踪订阅者数量（协议设计如此），
-    但可以暴露绑定地址、HWM、已发布消息数等信息。
+    通过 ZMQ socket monitor 追踪 SUB 客户端的连接/断开事件，
+    暴露：连接数、发布统计、主题列表、连接事件日志。
     """
     rc = RedisClient.get_client()
     if rc is None:
@@ -132,7 +132,11 @@ async def zmq_status():
         "topics": [],
         "publish_rate": 0,
         "last_publish_time": "",
-        "note": "ZMQ PUB 协议不跟踪订阅者数量，total_published 为已发布消息总数",
+        "subscriber_count": 0,
+        "total_connections": 0,
+        "total_disconnections": 0,
+        "connection_events": [],
+        "note": "subscriber_count 通过 ZMQ socket monitor 追踪 ACCEPTED/DISCONNECTED 事件",
     }
 
     if data:
@@ -146,5 +150,16 @@ async def zmq_status():
             result["publish_rate"] = float(data.get("publish_rate", 0))
         except (ValueError, TypeError):
             result["publish_rate"] = 0
+
+        result["subscriber_count"] = int(data.get("subscriber_count", 0))
+        result["total_connections"] = int(data.get("total_connections", 0))
+        result["total_disconnections"] = int(data.get("total_disconnections", 0))
+
+        events_str = data.get("connection_events", "")
+        if events_str:
+            try:
+                result["connection_events"] = json.loads(events_str)
+            except json.JSONDecodeError:
+                result["connection_events"] = []
 
     return result
