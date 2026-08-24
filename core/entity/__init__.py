@@ -5,12 +5,10 @@ from core.entity.base_tick import BaseTick
 from core.entity.future_tick import FutureLevel1TickData
 from core.entity.option_tick import OptionLevel1TickData
 from core.entity.stock_l2_tick import StockL2TickData
-from core.entity.crypto_tick import CryptoTickData
 
 __all__ = [
     'BaseTick',
     'FutureLevel1TickData',
     'OptionLevel1TickData',
     'StockL2TickData',
-    'CryptoTickData',
 ]

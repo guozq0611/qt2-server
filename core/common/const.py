@@ -12,4 +12,3 @@ class AssetType(Enum):
     FUTURE = 'future'
     OPTION = 'option'
     STOCK = 'stock'
-    CRYPTO = 'crypto'

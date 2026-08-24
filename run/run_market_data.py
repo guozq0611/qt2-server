@@ -2,13 +2,13 @@
 qt2-server 行情接收引擎主入口（Job 模式）
 
 功能：
-1. 每日自动接收 CTP 期货行情（可扩展期权/股票/数字货币）
+1. 每日自动接收 CTP 期货行情（可扩展期权/股票）
 2. 通过 ZeroMQ 进行行情分发，下游可订阅
 3. 二进制极速落盘（bin 格式，对齐 ClickHouse）
 4. Redis 监控上报（系统健康 + 最新行情快照）
 
 架构：
-- 网关层：BaseMdGateway -> CtpMdGateway / StockL2Gateway / CryptoGateway
+- 网关层：BaseMdGateway -> CtpMdGateway / StockL2Gateway
 - 录制层：BaseRecorder -> FutureTickRecorder / OptionTickRecorder / StockL2Recorder
 - 配置驱动：.env 默认配置 + 命令行参数覆盖
 
@@ -52,7 +52,6 @@ from repository.instrument.option_info_repo import OptionInfoRepo
 # 网关注册表（配置驱动，按 gateways 列表启动）
 from gateway.ctp.ctp_md_gateway import CtpMdGateway
 # from gateway.stock_l2.stock_l2_gateway import StockL2Gateway    # 未来
-# from gateway.crypto.crypto_gateway import CryptoGateway          # 未来
 
 # 录制器
 from data_process.future_tick_recorder import FutureTickRecorder
@@ -63,7 +62,6 @@ from data_process.option_tick_recorder import OptionTickRecorder
 GATEWAY_REGISTRY = {
     "ctp": CtpMdGateway,
     # "stock_l2": StockL2Gateway,    # 未来
-    # "crypto": CryptoGateway,       # 未来
 }
 
 # 录制器注册表：asset_type -> (RecorderClass, 落盘子路径)

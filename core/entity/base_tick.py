@@ -1,7 +1,7 @@
 """
 Tick 数据抽象基类
 - 定义所有资产类型 tick 的公共字段和行为
-- 具体资产类型（期货/期权/股票/数字货币）继承此类扩展各自字段
+- 具体资产类型（期货/期权/股票）继承此类扩展各自字段
 """
 from dataclasses import dataclass, field
 from typing import Optional

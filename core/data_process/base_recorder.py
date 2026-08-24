@@ -40,7 +40,7 @@ class BaseRecorder:
                  zmq_bind_url: str = "tcp://*:5555",
                  zmq_publisher: ZmqPublisher = None):
         self.tick_queue = tick_queue
-        self.asset_type = asset_type  # 'future' / 'option' / 'stock' / 'crypto'
+        self.asset_type = asset_type  # 'future' / 'option' / 'stock'
         self.data_dir = data_dir
         self.max_records_per_file = max_records_per_file
         self.fields_spec = fields_spec

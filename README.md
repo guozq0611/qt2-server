@@ -1,6 +1,6 @@
 # qt2-server
 
-Multi-asset market data gateway: CTP futures/options, stock L2, crypto.
+Multi-asset market data gateway: CTP futures/options, stock L2.
 
 ## 功能
 
@@ -9,7 +9,7 @@ Multi-asset market data gateway: CTP futures/options, stock L2, crypto.
 - **ZeroMQ 分发**：所有 tick 通过 ZMQ PUB/SUB 极速广播，下游可按 topic 订阅
 - **二进制落盘**：bin 格式极速落盘，对齐 ClickHouse Int64，下游可零拷贝消费
 - **Redis 监控**：系统健康指标 + 全市场最新行情快照，每 2 秒上报一次
-- **多网关架构**：BaseMdGateway 抽象基类，支持扩展股票 L2 / 数字货币等数据源
+- **多网关架构**：BaseMdGateway 抽象基类，支持扩展股票 L2 等数据源
 
 ## 快速开始
 
@@ -68,8 +68,8 @@ python run/run_market_data.py --help
 │                     │    │                     │
 │  BaseMdGateway      │    │  BaseRecorder       │
 │   ├─ CtpMdGateway   │    │   ├─ FutureRecorder │
-│   ├─ StockL2Gateway │    │   ├─ OptionRecorder │
-│   └─ CryptoGateway  │    │   └─ StockL2Recorder│
+│   └─ StockL2Gateway │    │   ├─ OptionRecorder │
+│                      │    │   └─ StockL2Recorder│
 └─────────┬───────────┘    └─────────┬───────────┘
           │                          │
           │   tick_queue (内存队列)   │
@@ -139,10 +139,10 @@ qt2-server/
 │   ├── setting/                # 配置入口
 │   ├── util/                   # 工具类（log/db/process/zmq）
 │   ├── database/redis/         # Redis 客户端
-│   ├── entity/                 # Tick 数据结构（base/future/option/stock/crypto）
+│   ├── entity/                 # Tick 数据结构（base/future/option/stock）
 │   ├── gateway/base_gateway.py # 网关抽象基类
 │   └── data_process/base_recorder.py  # 录制器抽象基类
-├── gateway/                    # 业务层 - 行情网关（ctp/stock_l2/crypto）
+├── gateway/                    # 业务层 - 行情网关（ctp/stock_l2）
 ├── data_process/               # 业务层 - 录制器（future/option/stock）
 ├── repository/                 # 业务层 - 数据仓库（trade_calendar/instrument/）
 ├── run/                        # 启动入口

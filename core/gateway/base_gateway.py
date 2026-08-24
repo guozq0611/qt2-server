@@ -1,7 +1,7 @@
 """
 行情网关抽象基类
 - 定义所有行情网关的统一接口
-- 具体网关（CTP/股票L2/数字货币）继承此类实现各自的数据源接入
+- 具体网关（CTP/股票L2）继承此类实现各自的数据源接入
 """
 from abc import ABC, abstractmethod
 import queue
