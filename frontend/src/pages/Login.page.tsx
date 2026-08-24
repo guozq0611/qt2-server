@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useFormik } from 'formik';
 import classNames from 'classnames';
-import { Link } from 'react-router-dom';
 import PageWrapper from '../components/layouts/PageWrapper/PageWrapper';
 import Button from '../components/ui/Button';
 import { useAuth } from '../context/authContext';
@@ -60,36 +59,7 @@ const LoginPage = () => {
 						<LogoTemplate className='h-12' />
 					</div>
 					<div>
-						<span className='text-4xl font-semibold'>Sign in</span>
-					</div>
-					<div>
-						<span>Sign up with Open account</span>
-					</div>
-					<div className='grid grid-cols-12 gap-4'>
-						<div className='col-span-6'>
-							<Button
-								icon='CustomGoogle'
-								variant='outline'
-								color='zinc'
-								size='lg'
-								className='w-full'>
-								Google
-							</Button>
-						</div>
-						<div className='col-span-6'>
-							<Button
-								icon='CustomApple'
-								variant='outline'
-								color='zinc'
-								size='lg'
-								className='w-full'>
-								Apple
-							</Button>
-						</div>
-					</div>
-					<div className='border border-zinc-500/25 dark:border-zinc-500/50' />
-					<div>
-						<span>Or continue with email address</span>
+						<span className='text-4xl font-semibold'>qt2-server</span>
 					</div>
 					<form className='flex flex-col gap-4' noValidate>
 						<div
@@ -160,21 +130,6 @@ const LoginPage = () => {
 							</Button>
 						</div>
 					</form>
-					<div>
-						<span className='text-zinc-500'>
-							This site is protected by reCAPTCHA and the Google Privacy Policy.
-						</span>
-					</div>
-					<div>
-						<span className='flex gap-2 text-sm'>
-							<span className='text-zinc-400 dark:text-zinc-600'>
-								Don’t have an account?
-							</span>
-							<Link to='/' className='hover:text-inherit'>
-								Sign up
-							</Link>
-						</span>
-					</div>
 				</div>
 			</div>
 		</PageWrapper>
