@@ -1,0 +1,30 @@
+# CTP 行情接口（openctp_ctp PyPI 包）
+openctp_ctp
+
+# ZeroMQ 行情分发
+pyzmq
+
+# Redis 监控上报
+redis
+
+# 数据库（合约信息、交易日历）
+sqlalchemy
+pymysql            # MySQL / OceanBase 驱动
+psycopg2-binary    # PostgreSQL 驱动
+
+# 数据处理（repo 层查询返回 DataFrame）
+pandas
+
+# 基础数据同步（期货合约信息、交易日历）
+tushare
+
+# 日志
+loguru
+
+# .env 配置加载
+python-dotenv
+
+# FastAPI 监控后端
+fastapi
+uvicorn
+httpx  # API 测试客户端

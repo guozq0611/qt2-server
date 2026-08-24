@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qt2-server"
+version = "0.1.0"
+description = "Multi-asset market data gateway: CTP futures/options, stock L2, crypto"
+requires-python = ">=3.10"
+dependencies = [
+    "openctp_ctp",
+    "pyzmq",
+    "redis",
+    "sqlalchemy",
+    "pymysql",
+    "pandas",
+    "loguru",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.setuptools.packages.find]
+include = ["core*", "gateway*", "data_process*", "repository*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
