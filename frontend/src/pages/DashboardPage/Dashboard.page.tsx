@@ -117,11 +117,6 @@ const DashboardPage = () => {
         <SubheaderLeft>
           <div className='text-xl font-bold'>系统状态总览</div>
         </SubheaderLeft>
-        <SubheaderRight>
-          <Badge color={data?.redis_ok ? 'emerald' : 'red'} colorIntensity='500'>
-            Redis: {data?.redis_ok ? '正常' : '不可用'}
-          </Badge>
-        </SubheaderRight>
       </Subheader>
       <Container>
         {error && (

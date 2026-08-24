@@ -11,13 +11,16 @@ const DefaultFooterTemplate = () => {
 			try {
 				const result = await api.getConfig();
 				const b = (result as any)?.app?.brand;
-				if (b) setBrand(b);
+				if (b !== undefined) setBrand(b);
 			} catch {
 				// 使用默认值
 			}
 		};
 		fetchBrand();
 	}, []);
+
+	// brand 为空字符串则不显示页脚
+	if (!brand) return null;
 
 	return (
 		<Footer>
