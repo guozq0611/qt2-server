@@ -30,7 +30,7 @@ class OptionInfoRepo:
         FROM {self.TABLE} 
         WHERE exchange_id = :exchange_id 
           AND status = 1 
-          AND delist_date >= CURDATE()
+          AND delist_date >= CURRENT_DATE
         """
         try:
             with self.engine.connect() as conn:
@@ -50,7 +50,7 @@ class OptionInfoRepo:
         FROM {self.TABLE}
         WHERE exchange_id = :exchange_id
           AND status = 1
-          AND delist_date >= CURDATE()
+          AND delist_date >= CURRENT_DATE
         """
         mapping = {}
         try:

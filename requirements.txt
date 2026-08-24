@@ -9,7 +9,8 @@ redis
 
 # 数据库（合约信息、交易日历）
 sqlalchemy
-pymysql
+pymysql            # MySQL / OceanBase 驱动
+psycopg2-binary    # PostgreSQL 驱动
 
 # 数据处理（repo 层查询返回 DataFrame）
 pandas

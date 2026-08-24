@@ -7,7 +7,7 @@ from fastapi import APIRouter
 
 from core.setting.setting import (
     GATEWAYS, CTP_MD_FRONT_ADDRESS, CTP_SUBSCRIBE_EXCHANGES, CTP_SUBSCRIBE_ASSET_TYPES,
-    MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_DATABASE,
+    DB_TYPE, DB_HOST, DB_PORT, DB_USER, DB_DATABASE,
     REDIS_HOST, REDIS_PORT, REDIS_DB,
     ZMQ_BIND_URL, DATA_DIR,
 )
@@ -33,12 +33,13 @@ async def get_config():
             "subscribe_exchanges": CTP_SUBSCRIBE_EXCHANGES,
             "subscribe_asset_types": CTP_SUBSCRIBE_ASSET_TYPES,
         },
-        "mysql": {
-            "host": MYSQL_HOST,
-            "port": MYSQL_PORT,
-            "user": MYSQL_USER,
+        "database": {
+            "type": DB_TYPE,
+            "host": DB_HOST,
+            "port": DB_PORT,
+            "user": DB_USER,
             "password": _mask("***"),
-            "database": MYSQL_DATABASE,
+            "database": DB_DATABASE,
         },
         "redis": {
             "host": REDIS_HOST,

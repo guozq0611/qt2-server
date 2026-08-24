@@ -21,7 +21,7 @@ class FutureInfoRepo:
         FROM {self.TABLE} 
         WHERE exchange_id = :exchange_id 
           AND status = 1 
-          AND delist_date >= CURDATE()
+          AND delist_date >= CURRENT_DATE
         """
         with self.engine.connect() as conn:
             result = conn.execute(text(sql), {"exchange_id": exchange_id})

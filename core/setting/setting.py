@@ -38,13 +38,23 @@ CTP_SUBSCRIBE_ASSET_TYPES = _parse_list(
 )
 
 # ==========================================================
-# 3. MySQL（合约信息、交易日历）
+# 3. 数据库（合约信息、交易日历）
+#    支持: mysql / postgres / ob(OceanBase, 兼容 MySQL 协议)
 # ==========================================================
-MYSQL_HOST = os.getenv("MYSQL_HOST", "")
-MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
-MYSQL_USER = os.getenv("MYSQL_USER", "")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
-MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "")
+DB_TYPE = os.getenv("DB_TYPE", "mysql").lower()
+DB_HOST = os.getenv("DB_HOST", "")
+DB_PORT = int(os.getenv("DB_PORT", "3306"))
+DB_USER = os.getenv("DB_USER", "")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+DB_DATABASE = os.getenv("DB_DATABASE", "")
+
+# 向后兼容：如果 DB_HOST 为空但 MYSQL_HOST 有值，则回退到旧变量
+if not DB_HOST:
+    DB_HOST = os.getenv("MYSQL_HOST", "")
+    DB_PORT = int(os.getenv("MYSQL_PORT", "3306"))
+    DB_USER = os.getenv("MYSQL_USER", "")
+    DB_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
+    DB_DATABASE = os.getenv("MYSQL_DATABASE", "")
 
 # ==========================================================
 # 4. Redis（监控上报、最新行情快照）

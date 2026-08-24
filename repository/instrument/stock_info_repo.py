@@ -28,7 +28,7 @@ class StockInfoRepo:
         FROM {self.TABLE} 
         WHERE exchange = :exchange 
           AND status = 1 
-          AND delist_date >= CURDATE()
+          AND delist_date >= CURRENT_DATE
         """
         try:
             with self.engine.connect() as conn:
