@@ -147,7 +147,7 @@ const TickSnapshotPage = () => {
 
   const fetchData = async () => {
     try {
-      const result = await api.getLatestTicks(assetType, 500);
+      const result = await api.getLatestTicks(assetType, 5000);
       const newTicks = (result as any).ticks || [];
       setTicks(newTicks);
       setCount((result as any).count || 0);

@@ -54,7 +54,10 @@ async def overview():
 
 @router.get("/ticks/{asset_type}")
 async def latest_ticks(asset_type: str, limit: int = 100):
-    """获取指定资产类型的最新行情快照"""
+    """获取指定资产类型的最新行情快照
+
+    返回全部 tick（不预先切片），由前端按 future_type/option_type 过滤后展示。
+    """
     asset_type = asset_type.lower()
     rc = RedisClient.get_client()
     if rc is None:
@@ -74,8 +77,12 @@ async def latest_ticks(asset_type: str, limit: int = 100):
         except json.JSONDecodeError:
             continue
 
-    # 按 last_price 或 symbol 排序，限制返回数量
-    ticks = ticks[:limit]
+    # 按 update_time 降序排序（最近更新的排在前面）
+    ticks.sort(key=lambda x: (x.get("update_time", ""), x.get("symbol", "")), reverse=True)
+
+    # 仍支持 limit，默认较大值；0 表示不限制
+    if limit > 0:
+        ticks = ticks[:limit]
 
     return {"asset_type": asset_type, "count": len(ticks), "ticks": ticks}
 
@@ -102,7 +109,9 @@ async def all_latest_ticks(limit: int = 50):
                 ticks.append(tick)
             except json.JSONDecodeError:
                 continue
-        ticks = ticks[:limit]
+        ticks.sort(key=lambda x: (x.get("update_time", ""), x.get("symbol", "")), reverse=True)
+        if limit > 0:
+            ticks = ticks[:limit]
         result[asset_type] = {"count": len(ticks), "ticks": ticks}
 
     return result
