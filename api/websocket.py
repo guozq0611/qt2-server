@@ -12,7 +12,7 @@ import time
 from typing import List, Optional, Set
 
 import zmq
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from core.database.redis.redis_client import RedisClient
 from core.setting.setting import ZMQ_BIND_URL
@@ -70,7 +70,11 @@ def _start_zmq_subscriber():
     def run():
         while True:
             try:
-                topic_bytes, raw_bytes = socket.recv_multipart()
+                parts = socket.recv_multipart()
+                if len(parts) < 2:
+                    continue
+                topic_bytes = parts[0]
+                raw_bytes = b''.join(parts[1:])
                 topic = topic_bytes.decode('utf-8', errors='replace')
                 parts = topic.split('.')
                 if len(parts) < 3:
@@ -148,19 +152,16 @@ def init_websocket(app_loop: asyncio.AbstractEventLoop):
     asyncio.create_task(_broadcast_loop())
 
 
-@router.websocket("/ws/ticks/{asset_type}")
-async def tick_websocket(
-    websocket: WebSocket,
-    asset_type: str,
-    future_type: Optional[str] = Query(None),
-    option_type: Optional[str] = Query(None),
-    product_id: Optional[str] = Query(None),
-):
+@router.websocket("/ticks/{asset_type}")
+async def tick_websocket(websocket: WebSocket, asset_type: str):
     """WebSocket 行情推送
 
     连接示例: /api/ws/ticks/future?product_id=IH
               /api/ws/ticks/option?option_type=INDEX_OPTION&product_id=IO
     """
+    future_type = websocket.query_params.get('future_type')
+    option_type = websocket.query_params.get('option_type')
+    product_id = websocket.query_params.get('product_id')
     client = _Client(websocket, asset_type, future_type, option_type, product_id)
     _clients.add(client)
     try:
