@@ -147,9 +147,11 @@ const TickSnapshotPage = () => {
 
   const fetchData = async () => {
     try {
-      const params: { future_type?: string; option_type?: string } = {};
+      const params: { future_type?: string; option_type?: string; product_id?: string } = {};
       if (assetType === 'future' && futureType !== 'ALL') params.future_type = futureType;
       if (assetType === 'option' && optionType !== 'ALL') params.option_type = optionType;
+      if (assetType === 'future' && selectedProduct !== 'ALL') params.product_id = selectedProduct;
+      if (assetType === 'option' && selectedOptionProduct !== 'ALL') params.product_id = selectedOptionProduct;
 
       const result = await api.getLatestTicks(assetType, 500, params);
       const newTicks = (result as any).ticks || [];

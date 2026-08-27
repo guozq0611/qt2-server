@@ -73,10 +73,11 @@ async def latest_ticks(
     limit: int = Query(100, ge=0),
     future_type: str = Query(None, description="期货分类: STOCK_INDEX / BOND / COMMODITY"),
     option_type: str = Query(None, description="期权分类: INDEX_OPTION / COMMODITY_OPTION / STOCK_OPTION"),
+    product_id: str = Query(None, description="品种过滤, 如 IC, IO, AG"),
 ):
     """获取指定资产类型的最新行情快照
 
-    支持按 future_type / option_type 过滤，减少前端数据量。
+    支持按 future_type / option_type / product_id 过滤，减少前端数据量。
     """
     asset_type = asset_type.lower()
     rc = RedisClient.get_client()
@@ -88,11 +89,17 @@ async def latest_ticks(
     if not raw:
         return {"asset_type": asset_type, "count": 0, "ticks": []}
 
+    filter_product = product_id.upper() if product_id else None
     ticks = []
     for symbol, json_str in raw.items():
         try:
             tick = json.loads(json_str)
             tick["symbol"] = symbol
+
+            # 品种过滤
+            if filter_product:
+                if _extract_product(symbol) != filter_product:
+                    continue
 
             # 分类过滤
             if asset_type == 'future' and future_type:

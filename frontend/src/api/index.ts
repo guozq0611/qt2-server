@@ -5,11 +5,12 @@ export const getOverview = () => apiClient.get('/monitor/overview');
 export const getLatestTicks = (
   assetType: string,
   limit = 500,
-  params?: { future_type?: string; option_type?: string },
+  params?: { future_type?: string; option_type?: string; product_id?: string },
 ) => {
   const query = new URLSearchParams({ limit: String(limit) });
   if (params?.future_type) query.append('future_type', params.future_type);
   if (params?.option_type) query.append('option_type', params.option_type);
+  if (params?.product_id) query.append('product_id', params.product_id);
   return apiClient.get(`/monitor/ticks/${assetType}?${query.toString()}`);
 };
 export const getAllTicks = (limit = 50) => apiClient.get(`/monitor/ticks?limit=${limit}`);
