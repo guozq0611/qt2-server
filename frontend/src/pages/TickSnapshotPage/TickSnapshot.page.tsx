@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import PageWrapper from '../../components/layouts/PageWrapper/PageWrapper';
 import Container from '../../components/layouts/Container/Container';
 import Subheader, { SubheaderLeft, SubheaderRight } from '../../components/layouts/Subheader/Subheader';
@@ -145,7 +145,7 @@ const TickSnapshotPage = () => {
     fetchProducts();
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const params: { future_type?: string; option_type?: string; product_id?: string } = {};
       if (assetType === 'future' && futureType !== 'ALL') params.future_type = futureType;
@@ -197,13 +197,19 @@ const TickSnapshotPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    assetType,
+    futureType,
+    selectedProduct,
+    optionType,
+    selectedOptionProduct,
+  ]);
 
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 1000);
     return () => clearInterval(interval);
-  }, [assetType]);
+  }, [fetchData]);
 
   // 构建 symbol → future_type 映射
   const symbolTypeMap = useMemo(() => {
