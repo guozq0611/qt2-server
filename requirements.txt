@@ -27,4 +27,5 @@ python-dotenv
 # FastAPI 监控后端
 fastapi
 uvicorn
+websockets  # WebSocket 实时行情推送
 httpx  # API 测试客户端
