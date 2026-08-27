@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import PageWrapper from '../../components/layouts/PageWrapper/PageWrapper';
 import Container from '../../components/layouts/Container/Container';
 import Subheader, { SubheaderLeft, SubheaderRight } from '../../components/layouts/Subheader/Subheader';
@@ -102,6 +102,11 @@ const classifyOption = (exchange: string): string => {
   return 'COMMODITY_OPTION';
 };
 
+interface PriceChangeState {
+  direction: 'up' | 'down' | 'same';
+  flash: boolean;
+}
+
 const TickSnapshotPage = () => {
   const [ticks, setTicks] = useState<TickData[]>([]);
   const [products, setProducts] = useState<ProductInfo[]>([]);
@@ -118,6 +123,10 @@ const TickSnapshotPage = () => {
   const [optionType, setOptionType] = useState<string>('ALL');
   const [selectedOptionProduct, setSelectedOptionProduct] = useState<string>('ALL');
   const [searchSymbol, setSearchSymbol] = useState<string>('');
+
+  // 价格涨跌状态：symbol -> { direction, flash }
+  const [priceStates, setPriceStates] = useState<Record<string, PriceChangeState>>({});
+  const prevPricesRef = useRef<Record<string, number>>({});
 
   // 获取品种列表（用于分类和过滤）
   useEffect(() => {
@@ -139,8 +148,44 @@ const TickSnapshotPage = () => {
   const fetchData = async () => {
     try {
       const result = await api.getLatestTicks(assetType, 500);
-      setTicks((result as any).ticks || []);
+      const newTicks = (result as any).ticks || [];
+      setTicks(newTicks);
       setCount((result as any).count || 0);
+
+      // 计算价格涨跌：与上一次最新价对比
+      const newStates: Record<string, PriceChangeState> = {};
+      const newPrev: Record<string, number> = {};
+      const prev = prevPricesRef.current;
+
+      newTicks.forEach((tick: TickData) => {
+        const current = tick.last_price;
+        const previous = prev[tick.symbol];
+        newPrev[tick.symbol] = current ?? 0;
+
+        if (current === undefined || previous === undefined || current === previous) {
+          // 保持上次的方向，但不闪烁
+          const old = priceStates[tick.symbol];
+          newStates[tick.symbol] = { direction: old?.direction || 'same', flash: false };
+        } else if (current > previous) {
+          newStates[tick.symbol] = { direction: 'up', flash: true };
+        } else {
+          newStates[tick.symbol] = { direction: 'down', flash: true };
+        }
+      });
+
+      prevPricesRef.current = newPrev;
+      setPriceStates(newStates);
+
+      // 600ms 后清除 flash 标记
+      setTimeout(() => {
+        setPriceStates((states) => {
+          const cleared: Record<string, PriceChangeState> = {};
+          Object.entries(states).forEach(([sym, st]) => {
+            cleared[sym] = { ...st, flash: false };
+          });
+          return cleared;
+        });
+      }, 600);
     } catch (err) {
       console.error(err);
     } finally {
@@ -217,6 +262,21 @@ const TickSnapshotPage = () => {
   const formatPrice = (v?: number) => {
     if (v === undefined || v === null) return '-';
     return (v / 10000).toFixed(2);
+  };
+
+  // 最新价颜色：红涨绿跌
+  const getPriceColorClass = (direction: 'up' | 'down' | 'same') => {
+    if (direction === 'up') return 'text-red-500';
+    if (direction === 'down') return 'text-green-500';
+    return 'text-blue-500';
+  };
+
+  // 最新价闪烁背景：红/绿浅背景，CSS 动画淡出
+  const getFlashClass = (state?: PriceChangeState) => {
+    if (!state || !state.flash) return '';
+    if (state.direction === 'up') return 'flash-up';
+    if (state.direction === 'down') return 'flash-down';
+    return '';
   };
 
   const formatNum = (v?: number) => {
@@ -422,6 +482,9 @@ const TickSnapshotPage = () => {
                   filteredTicks.map((tick) => {
                     if (assetType === 'future') {
                       const ft = getFutureType(tick.symbol);
+                      const ps = priceStates[tick.symbol];
+                      const priceColor = getPriceColorClass(ps?.direction || 'same');
+                      const flashClass = getFlashClass(ps);
                       return (
                         <tr
                           key={tick.symbol}
@@ -435,7 +498,7 @@ const TickSnapshotPage = () => {
                             </Badge>
                           </td>
                           <td className='px-3 py-2 font-mono font-bold'>{tick.symbol}</td>
-                          <td className='px-3 py-2 text-right font-mono text-blue-500'>
+                          <td className={`px-3 py-2 text-right font-mono ${priceColor} ${flashClass} transition-colors duration-500`}>
                             {formatPrice(tick.last_price)}
                           </td>
                           <td className='px-3 py-2 text-right font-mono'>
@@ -463,6 +526,9 @@ const TickSnapshotPage = () => {
                       );
                     }
                     // 期权行
+                    const ps = priceStates[tick.symbol];
+                    const priceColor = getPriceColorClass(ps?.direction || 'same');
+                    const flashClass = getFlashClass(ps);
                     return (
                       <tr
                         key={tick.symbol}
@@ -481,7 +547,7 @@ const TickSnapshotPage = () => {
                         <td className='px-3 py-2 text-right font-mono'>
                           {tick.strike ? (tick.strike / 10000).toFixed(2) : '-'}
                         </td>
-                        <td className='px-3 py-2 text-right font-mono text-blue-500'>
+                        <td className={`px-3 py-2 text-right font-mono ${priceColor} ${flashClass} transition-colors duration-500`}>
                           {formatPrice(tick.last_price)}
                         </td>
                         <td className='px-3 py-2 text-right font-mono'>
