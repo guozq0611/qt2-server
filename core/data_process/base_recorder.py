@@ -27,9 +27,13 @@ class BaseRecorder:
     子类需要：
     1. 定义 self.fields_spec（二进制字段格式列表）
     2. 定义 self.asset_type（资产类型字符串，用于 ZMQ topic 和落盘路径）
-    3. 实现 _extract_pack_values(tick_obj) -> tuple（从 tick 对象提取按 fields_spec 顺序的字段值）
-    4. 实现 _extract_redis_snapshot(tick_obj) -> dict（从 tick 对象提取 Redis 快照字典）
+    3. 定义 TICK_CLASS（期望的 tick 数据类，用于从共享队列中过滤）
+    4. 实现 _extract_pack_values(tick_obj) -> tuple（从 tick 对象提取按 fields_spec 顺序的字段值）
+    5. 实现 _extract_redis_snapshot(tick_obj) -> dict（从 tick 对象提取 Redis 快照字典）
     """
+
+    # 子类覆盖：期望的 tick 数据类
+    TICK_CLASS = None
 
     def __init__(self,
                  tick_queue: queue.Queue,
@@ -127,6 +131,10 @@ class BaseRecorder:
         while self.is_running:
             try:
                 tick_obj: BaseTick = self.tick_queue.get(timeout=1.0)
+
+                # 类型过滤：跳过不属于本录制器的 tick（共享队列场景）
+                if self.TICK_CLASS is not None and not isinstance(tick_obj, self.TICK_CLASS):
+                    continue
 
                 # 子类提供：从 tick 对象提取按 fields_spec 顺序的字段值
                 pack_values = self._extract_pack_values(tick_obj)

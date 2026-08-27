@@ -25,6 +25,8 @@ class OptionTickRecorder(BaseRecorder):
     - implied_vol:          d
     """
 
+    TICK_CLASS = OptionLevel1TickData
+
     FIELDS_SPEC = [
         # --- 公共字段（同期货） ---
         ('instrument_id',      '16s'),

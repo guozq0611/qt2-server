@@ -36,6 +36,8 @@ class FutureTickRecorder(BaseRecorder):
     - lower_limit_price:   q
     """
 
+    TICK_CLASS = FutureLevel1TickData
+
     FIELDS_SPEC = [
         ('instrument_id',      '16s'),
         ('exchange_id',         '8s'),
