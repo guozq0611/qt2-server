@@ -2,8 +2,16 @@ import apiClient from './client';
 
 // ===== 监控 =====
 export const getOverview = () => apiClient.get('/monitor/overview');
-export const getLatestTicks = (assetType: string, limit = 100) =>
-  apiClient.get(`/monitor/ticks/${assetType}?limit=${limit}`);
+export const getLatestTicks = (
+  assetType: string,
+  limit = 500,
+  params?: { future_type?: string; option_type?: string },
+) => {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (params?.future_type) query.append('future_type', params.future_type);
+  if (params?.option_type) query.append('option_type', params.option_type);
+  return apiClient.get(`/monitor/ticks/${assetType}?${query.toString()}`);
+};
 export const getAllTicks = (limit = 50) => apiClient.get(`/monitor/ticks?limit=${limit}`);
 export const getZmqStatus = () => apiClient.get('/monitor/zmq');
 export const getRedisStatus = () => apiClient.get('/monitor/redis');

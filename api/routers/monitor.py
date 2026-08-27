@@ -8,9 +8,11 @@
 - Redis INFO 命令                      Redis 服务器指标
 """
 import json
-from fastapi import APIRouter
+import re
+from fastapi import APIRouter, Query
 
 from core.database.redis.redis_client import RedisClient
+from repository.instrument.future_info_repo import classify_future
 from core.setting.setting import CTP_SUBSCRIBE_ASSET_TYPES, ZMQ_BIND_URL, REDIS_HOST, REDIS_PORT, REDIS_DB
 
 
@@ -52,11 +54,29 @@ async def overview():
     return result
 
 
+def _extract_product(symbol: str) -> str:
+    m = re.match(r'^([a-zA-Z]+)', symbol)
+    return m.group(1).upper() if m else ''
+
+
+def _classify_option(exchange: str) -> str:
+    if exchange == 'CFFEX':
+        return 'INDEX_OPTION'
+    if exchange in ('SSE', 'SZSE'):
+        return 'STOCK_OPTION'
+    return 'COMMODITY_OPTION'
+
+
 @router.get("/ticks/{asset_type}")
-async def latest_ticks(asset_type: str, limit: int = 100):
+async def latest_ticks(
+    asset_type: str,
+    limit: int = Query(100, ge=0),
+    future_type: str = Query(None, description="期货分类: STOCK_INDEX / BOND / COMMODITY"),
+    option_type: str = Query(None, description="期权分类: INDEX_OPTION / COMMODITY_OPTION / STOCK_OPTION"),
+):
     """获取指定资产类型的最新行情快照
 
-    返回全部 tick（不预先切片），由前端按 future_type/option_type 过滤后展示。
+    支持按 future_type / option_type 过滤，减少前端数据量。
     """
     asset_type = asset_type.lower()
     rc = RedisClient.get_client()
@@ -73,14 +93,23 @@ async def latest_ticks(asset_type: str, limit: int = 100):
         try:
             tick = json.loads(json_str)
             tick["symbol"] = symbol
+
+            # 分类过滤
+            if asset_type == 'future' and future_type:
+                product = _extract_product(symbol)
+                if classify_future(product) != future_type.upper():
+                    continue
+            if asset_type == 'option' and option_type:
+                if _classify_option(tick.get('exchange', '')) != option_type.upper():
+                    continue
+
             ticks.append(tick)
         except json.JSONDecodeError:
             continue
 
-    # 按 update_time 降序排序（最近更新的排在前面）
+    # 按 update_time 降序排序
     ticks.sort(key=lambda x: (x.get("update_time", ""), x.get("symbol", "")), reverse=True)
 
-    # 仍支持 limit，默认较大值；0 表示不限制
     if limit > 0:
         ticks = ticks[:limit]
 
