@@ -140,16 +140,17 @@ class CtpMdGateway(BaseMdGateway, mdapi.CThostFtdcMdSpi):
         # 2. 定义乘数 (对齐底层 UInt64/Int64 需求)
         M = 10000
 
-        instrument_id = pDepthMarketData.InstrumentID
+        raw_instrument_id = pDepthMarketData.InstrumentID
 
-        # 兼容处理：如果是 bytes 就解码为 str
-        if isinstance(instrument_id, bytes):
-            instrument_id = instrument_id.decode('gbk')
+        # 兼容处理：如果是 bytes 就解码为 str，并去除末尾空字节/空格
+        if isinstance(raw_instrument_id, bytes):
+            raw_instrument_id = raw_instrument_id.decode('gbk')
+        instrument_id = raw_instrument_id.split('\x00')[0].strip()
 
         # 3. 公共字段（期货和期权共享）
         common_fields = dict(
-            instrument_id=pDepthMarketData.InstrumentID,
-            exchange_id=self.symbol_exchange_map.get(pDepthMarketData.InstrumentID, ""),
+            instrument_id=instrument_id,
+            exchange_id=self.symbol_exchange_map.get(instrument_id, ""),
 
             trade_date=trade_date_val,
             action_date=action_date_val,
