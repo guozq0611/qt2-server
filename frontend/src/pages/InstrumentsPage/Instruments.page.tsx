@@ -39,13 +39,24 @@ interface OptionInstrument {
   expiry_date: string | null;
   list_date: string | null;
   delist_date: string | null;
+  option_type: string; // INDEX_OPTION / COMMODITY_OPTION / STOCK_OPTION
+  product_id: string;
 }
 
 interface SummaryData {
   future: Record<string, number>;
   future_by_type: Record<string, number>;
   option: Record<string, number>;
+  option_by_type: Record<string, number>;
   total: number;
+}
+
+interface OptionProduct {
+  product_id: string;
+  exchange: string;
+  option_type: string;
+  name: string;
+  count: number;
 }
 
 const FUTURE_TYPE_LABELS: Record<string, string> = {
@@ -58,6 +69,18 @@ const FUTURE_TYPE_COLORS: Record<string, string> = {
   STOCK_INDEX: 'red',
   BOND: 'blue',
   COMMODITY: 'emerald',
+};
+
+const OPTION_TYPE_LABELS: Record<string, string> = {
+  INDEX_OPTION: '股指期权',
+  COMMODITY_OPTION: '商品期权',
+  STOCK_OPTION: '股票期权',
+};
+
+const OPTION_TYPE_COLORS: Record<string, string> = {
+  INDEX_OPTION: 'red',
+  COMMODITY_OPTION: 'emerald',
+  STOCK_OPTION: 'blue',
 };
 
 // 导出 CSV（带 UTF-8 BOM，Excel 可直接打开）
@@ -91,12 +114,15 @@ const exportCSV = (data: FutureInstrument[], filename: string) => {
 const InstrumentsPage = () => {
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [instruments, setInstruments] = useState<FutureInstrument[] | OptionInstrument[]>([]);
+  const [optionProducts, setOptionProducts] = useState<OptionProduct[]>([]);
   const [tab, setTab] = useState<'summary' | 'future' | 'option'>('summary');
   const [loading, setLoading] = useState(true);
 
   // 过滤
   const [futureType, setFutureType] = useState<string>('ALL');
   const [exchange, setExchange] = useState<string>('ALL');
+  const [optionType, setOptionType] = useState<string>('ALL');
+  const [selectedOptionProduct, setSelectedOptionProduct] = useState<string>('ALL');
   const [searchText, setSearchText] = useState<string>('');
 
   useEffect(() => {
@@ -109,8 +135,12 @@ const InstrumentsPage = () => {
           const result = await api.getFutureInstruments();
           setInstruments((result as any).instruments || []);
         } else if (tab === 'option') {
-          const result = await api.getOptionInstruments();
-          setInstruments((result as any).instruments || []);
+          const [instrResult, prodResult] = await Promise.all([
+            api.getOptionInstruments(),
+            api.getOptionProducts(),
+          ]);
+          setInstruments((instrResult as any).instruments || []);
+          setOptionProducts((prodResult as any).products || []);
         }
       } catch (err) {
         console.error(err);
@@ -132,6 +162,14 @@ const InstrumentsPage = () => {
         result = result.filter((i) => i.exchange === exchange);
       }
     }
+    if (tab === 'option') {
+      if (optionType !== 'ALL') {
+        result = result.filter((i) => i.option_type === optionType);
+      }
+      if (selectedOptionProduct !== 'ALL') {
+        result = result.filter((i) => i.product_id === selectedOptionProduct);
+      }
+    }
     if (searchText.trim()) {
       const q = searchText.trim().toUpperCase();
       result = result.filter(
@@ -143,7 +181,13 @@ const InstrumentsPage = () => {
       );
     }
     return result;
-  }, [instruments, futureType, exchange, searchText, tab]);
+  }, [instruments, futureType, exchange, optionType, selectedOptionProduct, searchText, tab]);
+
+  // 期权品种过滤选项（按分类过滤）
+  const optionProductOptions = useMemo(() => {
+    if (optionType === 'ALL') return optionProducts;
+    return optionProducts.filter((p) => p.option_type === optionType);
+  }, [optionProducts, optionType]);
 
   const exchanges = useMemo(() => {
     if (tab !== 'future') return [];
@@ -180,6 +224,7 @@ const InstrumentsPage = () => {
         {tab === 'summary' && summary ? (
           <div className='space-y-4'>
             {/* 期货分类卡片 */}
+            <div className='text-sm font-bold text-zinc-500'>期货分类</div>
             <div className='grid grid-cols-1 gap-4 md:grid-cols-3'>
               {Object.entries(FUTURE_TYPE_LABELS).map(([key, label]) => (
                 <Card key={key}>
@@ -192,6 +237,28 @@ const InstrumentsPage = () => {
                         </div>
                       </div>
                       <Badge color={FUTURE_TYPE_COLORS[key] as any} colorIntensity='500'>
+                        {key}
+                      </Badge>
+                    </div>
+                  </CardBody>
+                </Card>
+              ))}
+            </div>
+
+            {/* 期权分类卡片 */}
+            <div className='text-sm font-bold text-zinc-500'>期权分类</div>
+            <div className='grid grid-cols-1 gap-4 md:grid-cols-3'>
+              {Object.entries(OPTION_TYPE_LABELS).map(([key, label]) => (
+                <Card key={key}>
+                  <CardBody>
+                    <div className='flex items-center justify-between'>
+                      <div>
+                        <div className='text-sm text-zinc-500'>{label}</div>
+                        <div className='text-2xl font-bold'>
+                          {summary.option_by_type?.[key] || 0}
+                        </div>
+                      </div>
+                      <Badge color={OPTION_TYPE_COLORS[key] as any} colorIntensity='500'>
                         {key}
                       </Badge>
                     </div>
@@ -306,6 +373,50 @@ const InstrumentsPage = () => {
 
               {tab === 'option' && (
                 <div className='flex flex-wrap items-center gap-3 border-b p-3'>
+                  {/* 期权分类 */}
+                  <div className='flex gap-1'>
+                    <button
+                      onClick={() => {
+                        setOptionType('ALL');
+                        setSelectedOptionProduct('ALL');
+                      }}
+                      className={`rounded px-3 py-1 text-sm ${
+                        optionType === 'ALL'
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-zinc-200 dark:bg-zinc-700'
+                      }`}>
+                      全部
+                    </button>
+                    {Object.entries(OPTION_TYPE_LABELS).map(([key, label]) => (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          setOptionType(key);
+                          setSelectedOptionProduct('ALL');
+                        }}
+                        className={`rounded px-3 py-1 text-sm ${
+                          optionType === key
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-zinc-200 dark:bg-zinc-700'
+                        }`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 品种过滤 */}
+                  <select
+                    value={selectedOptionProduct}
+                    onChange={(e) => setSelectedOptionProduct(e.target.value)}
+                    className='rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800'>
+                    <option value='ALL'>全部品种</option>
+                    {optionProductOptions.map((p) => (
+                      <option key={p.product_id} value={p.product_id}>
+                        {p.product_id} ({p.name}) - {OPTION_TYPE_LABELS[p.option_type]}
+                      </option>
+                    ))}
+                  </select>
+
                   <input
                     type='text'
                     placeholder='搜索合约/标的/名称...'
@@ -342,6 +453,8 @@ const InstrumentsPage = () => {
                         </>
                       ) : (
                         <>
+                          <th className='px-3 py-2'>分类</th>
+                          <th className='px-3 py-2'>品种</th>
                           <th className='px-3 py-2'>合约代码</th>
                           <th className='px-3 py-2'>交易所</th>
                           <th className='px-3 py-2'>类型</th>
@@ -357,13 +470,13 @@ const InstrumentsPage = () => {
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={tab === 'future' ? 11 : 8} className='py-8 text-center text-zinc-400'>
+                        <td colSpan={tab === 'future' ? 11 : 10} className='py-8 text-center text-zinc-400'>
                           加载中...
                         </td>
                       </tr>
                     ) : filteredInstruments.length === 0 ? (
                       <tr>
-                        <td colSpan={tab === 'future' ? 11 : 8} className='py-8 text-center text-zinc-400'>
+                        <td colSpan={tab === 'future' ? 11 : 10} className='py-8 text-center text-zinc-400'>
                           暂无数据
                         </td>
                       </tr>
@@ -403,6 +516,15 @@ const InstrumentsPage = () => {
                             </>
                           ) : (
                             <>
+                              <td className='px-3 py-2'>
+                                <Badge
+                                  color={OPTION_TYPE_COLORS[inst.option_type] as any}
+                                  colorIntensity='500'
+                                  className='text-xs'>
+                                  {OPTION_TYPE_LABELS[inst.option_type] || inst.option_type}
+                                </Badge>
+                              </td>
+                              <td className='px-3 py-2 font-mono'>{inst.product_id || '-'}</td>
                               <td className='px-3 py-2 font-mono font-bold'>{inst.symbol}</td>
                               <td className='px-3 py-2'>{inst.exchange}</td>
                               <td className='px-3 py-2'>

@@ -15,8 +15,11 @@ export const getFutureInstruments = (params?: {
   product_id?: string;
 }) => apiClient.get('/instruments/future', { params: params || {} });
 export const getFutureProducts = () => apiClient.get('/instruments/future/products');
-export const getOptionInstruments = (exchange?: string) =>
-  apiClient.get('/instruments/option', { params: exchange ? { exchange } : {} });
+export const getOptionInstruments = (params?: {
+  exchange?: string;
+  option_type?: string;
+}) => apiClient.get('/instruments/option', { params: params || {} });
+export const getOptionProducts = () => apiClient.get('/instruments/option/products');
 export const getInstrumentsSummary = () => apiClient.get('/instruments/summary');
 
 // ===== 文件 =====
@@ -36,6 +39,7 @@ export default {
   getFutureInstruments,
   getFutureProducts,
   getOptionInstruments,
+  getOptionProducts,
   getInstrumentsSummary,
   getFilesList,
   getFilesStats,

@@ -75,9 +75,37 @@ const FUTURE_TYPE_COLORS: Record<string, string> = {
   COMMODITY: 'emerald',
 };
 
+const OPTION_TYPE_LABELS: Record<string, string> = {
+  INDEX_OPTION: '股指期权',
+  COMMODITY_OPTION: '商品期权',
+  STOCK_OPTION: '股票期权',
+};
+
+interface OptionProductInfo {
+  product_id: string;
+  exchange: string;
+  option_type: string;
+  name: string;
+  count: number;
+}
+
+// 从期权合约代码提取品种前缀（字母部分）
+const extractOptionProduct = (symbol: string): string => {
+  const match = symbol.match(/^([a-zA-Z]+)/);
+  return match ? match[1].toUpperCase() : '';
+};
+
+// 根据交易所判断期权分类
+const classifyOption = (exchange: string): string => {
+  if (exchange === 'CFFEX') return 'INDEX_OPTION';
+  if (exchange === 'SSE' || exchange === 'SZSE') return 'STOCK_OPTION';
+  return 'COMMODITY_OPTION';
+};
+
 const TickSnapshotPage = () => {
   const [ticks, setTicks] = useState<TickData[]>([]);
   const [products, setProducts] = useState<ProductInfo[]>([]);
+  const [optionProducts, setOptionProducts] = useState<OptionProductInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [count, setCount] = useState(0);
 
@@ -87,14 +115,20 @@ const TickSnapshotPage = () => {
   // 过滤状态
   const [futureType, setFutureType] = useState<string>('ALL');
   const [selectedProduct, setSelectedProduct] = useState<string>('ALL');
+  const [optionType, setOptionType] = useState<string>('ALL');
+  const [selectedOptionProduct, setSelectedOptionProduct] = useState<string>('ALL');
   const [searchSymbol, setSearchSymbol] = useState<string>('');
 
   // 获取品种列表（用于分类和过滤）
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const result = await api.getFutureProducts();
-        setProducts((result as any).products || []);
+        const [futureResult, optionResult] = await Promise.all([
+          api.getFutureProducts(),
+          api.getOptionProducts(),
+        ]);
+        setProducts((futureResult as any).products || []);
+        setOptionProducts((optionResult as any).products || []);
       } catch (err) {
         console.error(err);
       }
@@ -138,26 +172,47 @@ const TickSnapshotPage = () => {
   // 过滤后的 ticks
   const filteredTicks = useMemo(() => {
     let result = ticks;
-    if (futureType !== 'ALL') {
-      result = result.filter((t) => getFutureType(t.symbol) === futureType);
-    }
-    if (selectedProduct !== 'ALL') {
-      result = result.filter(
-        (t) => extractProduct(t.symbol) === selectedProduct,
-      );
+    if (assetType === 'future') {
+      if (futureType !== 'ALL') {
+        result = result.filter((t) => getFutureType(t.symbol) === futureType);
+      }
+      if (selectedProduct !== 'ALL') {
+        result = result.filter(
+          (t) => extractProduct(t.symbol) === selectedProduct,
+        );
+      }
+    } else {
+      // 期权过滤
+      if (optionType !== 'ALL') {
+        result = result.filter((t) => {
+          const ex = (t as any).exchange || '';
+          return classifyOption(ex) === optionType;
+        });
+      }
+      if (selectedOptionProduct !== 'ALL') {
+        result = result.filter(
+          (t) => extractOptionProduct(t.symbol) === selectedOptionProduct,
+        );
+      }
     }
     if (searchSymbol.trim()) {
       const q = searchSymbol.trim().toUpperCase();
       result = result.filter((t) => t.symbol.toUpperCase().includes(q));
     }
     return result;
-  }, [ticks, futureType, selectedProduct, searchSymbol, symbolTypeMap]);
+  }, [ticks, assetType, futureType, selectedProduct, optionType, selectedOptionProduct, searchSymbol, symbolTypeMap]);
 
   // 按品种过滤选项
   const productOptions = useMemo(() => {
     if (futureType === 'ALL') return products;
     return products.filter((p) => p.future_type === futureType);
   }, [products, futureType]);
+
+  // 期权品种过滤选项
+  const optionProductOptions = useMemo(() => {
+    if (optionType === 'ALL') return optionProducts;
+    return optionProducts.filter((p) => p.option_type === optionType);
+  }, [optionProducts, optionType]);
 
   const formatPrice = (v?: number) => {
     if (v === undefined || v === null) return '-';
@@ -184,6 +239,8 @@ const TickSnapshotPage = () => {
                   setAssetType(t);
                   setFutureType('ALL');
                   setSelectedProduct('ALL');
+                  setOptionType('ALL');
+                  setSelectedOptionProduct('ALL');
                   setSearchSymbol('');
                 }}
                 className={`rounded px-3 py-1 text-sm ${
@@ -243,6 +300,54 @@ const TickSnapshotPage = () => {
                     {productOptions.map((p) => (
                       <option key={p.product_id} value={p.product_id}>
                         {p.product_id} ({p.name}) - {FUTURE_TYPE_LABELS[p.future_type]}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+
+              {assetType === 'option' && (
+                <>
+                  {/* 期权分类 */}
+                  <div className='flex gap-1'>
+                    <button
+                      onClick={() => {
+                        setOptionType('ALL');
+                        setSelectedOptionProduct('ALL');
+                      }}
+                      className={`rounded px-3 py-1 text-sm ${
+                        optionType === 'ALL'
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-zinc-200 dark:bg-zinc-700'
+                      }`}>
+                      全部
+                    </button>
+                    {Object.entries(OPTION_TYPE_LABELS).map(([key, label]) => (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          setOptionType(key);
+                          setSelectedOptionProduct('ALL');
+                        }}
+                        className={`rounded px-3 py-1 text-sm ${
+                          optionType === key
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-zinc-200 dark:bg-zinc-700'
+                        }`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 期权品种过滤 */}
+                  <select
+                    value={selectedOptionProduct}
+                    onChange={(e) => setSelectedOptionProduct(e.target.value)}
+                    className='rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800'>
+                    <option value='ALL'>全部品种</option>
+                    {optionProductOptions.map((p) => (
+                      <option key={p.product_id} value={p.product_id}>
+                        {p.product_id} ({p.name}) - {OPTION_TYPE_LABELS[p.option_type]}
                       </option>
                     ))}
                   </select>

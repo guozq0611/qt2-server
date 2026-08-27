@@ -121,6 +121,7 @@ class OptionTickRecorder(BaseRecorder):
             "underlying": tick_obj.underlying_symbol,
             "strike": tick_obj.strike_price / M,
             "type": tick_obj.contract_type,
+            "exchange": tick_obj.exchange_id,
             "delta": tick_obj.delta,
             "implied_vol": tick_obj.implied_vol,
         }
