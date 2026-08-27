@@ -26,6 +26,21 @@ interface FutureInstrument {
   future_type: string;
 }
 
+interface OptionInstrument {
+  symbol: string;
+  exchange: string;
+  name: string;
+  underlying: string;
+  contract_type: string; // 'C' / 'P'
+  strike_price: number;
+  multiplier: number;
+  tick_size: number;
+  delivery_month: number | null;
+  expiry_date: string | null;
+  list_date: string | null;
+  delist_date: string | null;
+}
+
 interface SummaryData {
   future: Record<string, number>;
   future_by_type: Record<string, number>;
@@ -75,7 +90,7 @@ const exportCSV = (data: FutureInstrument[], filename: string) => {
 
 const InstrumentsPage = () => {
   const [summary, setSummary] = useState<SummaryData | null>(null);
-  const [instruments, setInstruments] = useState<FutureInstrument[]>([]);
+  const [instruments, setInstruments] = useState<FutureInstrument[] | OptionInstrument[]>([]);
   const [tab, setTab] = useState<'summary' | 'future' | 'option'>('summary');
   const [loading, setLoading] = useState(true);
 
@@ -106,22 +121,24 @@ const InstrumentsPage = () => {
     fetchData();
   }, [tab]);
 
-  // 过滤后的期货合约
+  // 过滤后的合约
   const filteredInstruments = useMemo(() => {
-    if (tab !== 'future') return instruments;
-    let result = instruments;
-    if (futureType !== 'ALL') {
-      result = result.filter((i) => i.future_type === futureType);
-    }
-    if (exchange !== 'ALL') {
-      result = result.filter((i) => i.exchange === exchange);
+    let result = instruments as any[];
+    if (tab === 'future') {
+      if (futureType !== 'ALL') {
+        result = result.filter((i) => i.future_type === futureType);
+      }
+      if (exchange !== 'ALL') {
+        result = result.filter((i) => i.exchange === exchange);
+      }
     }
     if (searchText.trim()) {
       const q = searchText.trim().toUpperCase();
       result = result.filter(
         (i) =>
-          i.symbol.toUpperCase().includes(q) ||
-          i.product_id.toUpperCase().includes(q) ||
+          i.symbol?.toUpperCase().includes(q) ||
+          i.product_id?.toUpperCase().includes(q) ||
+          i.underlying?.toUpperCase().includes(q) ||
           (i.name || '').includes(searchText.trim()),
       );
     }
@@ -288,8 +305,19 @@ const InstrumentsPage = () => {
               )}
 
               {tab === 'option' && (
-                <div className='border-b p-3 text-sm text-zinc-500'>
-                  共 {instruments.length} 个合约
+                <div className='flex flex-wrap items-center gap-3 border-b p-3'>
+                  <input
+                    type='text'
+                    placeholder='搜索合约/标的/名称...'
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    className='rounded border border-zinc-300 bg-white px-3 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800'
+                  />
+                  <div className='ml-auto flex items-center gap-3'>
+                    <span className='text-sm text-zinc-500'>
+                      {filteredInstruments.length} 个合约
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -317,6 +345,11 @@ const InstrumentsPage = () => {
                           <th className='px-3 py-2'>合约代码</th>
                           <th className='px-3 py-2'>交易所</th>
                           <th className='px-3 py-2'>类型</th>
+                          <th className='px-3 py-2'>标的</th>
+                          <th className='px-3 py-2 text-right'>行权价</th>
+                          <th className='px-3 py-2 text-right'>乘数</th>
+                          <th className='px-3 py-2'>到期日</th>
+                          <th className='px-3 py-2'>摘牌日</th>
                         </>
                       )}
                     </tr>
@@ -324,13 +357,13 @@ const InstrumentsPage = () => {
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={tab === 'future' ? 11 : 3} className='py-8 text-center text-zinc-400'>
+                        <td colSpan={tab === 'future' ? 11 : 8} className='py-8 text-center text-zinc-400'>
                           加载中...
                         </td>
                       </tr>
                     ) : filteredInstruments.length === 0 ? (
                       <tr>
-                        <td colSpan={tab === 'future' ? 11 : 3} className='py-8 text-center text-zinc-400'>
+                        <td colSpan={tab === 'future' ? 11 : 8} className='py-8 text-center text-zinc-400'>
                           暂无数据
                         </td>
                       </tr>
@@ -373,10 +406,19 @@ const InstrumentsPage = () => {
                               <td className='px-3 py-2 font-mono font-bold'>{inst.symbol}</td>
                               <td className='px-3 py-2'>{inst.exchange}</td>
                               <td className='px-3 py-2'>
-                                <span className='rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'>
-                                  {inst.asset_type}
+                                <span className={`rounded px-2 py-0.5 text-xs ${
+                                  inst.contract_type === 'C'
+                                    ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'
+                                    : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                                }`}>
+                                  {inst.contract_type === 'C' ? '认购' : '认沽'}
                                 </span>
                               </td>
+                              <td className='px-3 py-2 font-mono text-xs'>{inst.underlying || '-'}</td>
+                              <td className='px-3 py-2 text-right font-mono'>{inst.strike_price || '-'}</td>
+                              <td className='px-3 py-2 text-right font-mono'>{inst.multiplier || '-'}</td>
+                              <td className='px-3 py-2 font-mono text-xs'>{inst.expiry_date || '-'}</td>
+                              <td className='px-3 py-2 font-mono text-xs'>{inst.delist_date || '-'}</td>
                             </>
                           )}
                         </tr>

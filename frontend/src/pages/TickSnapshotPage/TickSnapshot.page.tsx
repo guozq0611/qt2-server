@@ -18,6 +18,12 @@ interface TickData {
   ask_price_1?: number;
   ask_volume_1?: number;
   update_time?: string;
+  // 期权专属
+  underlying?: string;
+  strike?: number;
+  type?: string; // 'C' / 'P'
+  delta?: number;
+  implied_vol?: number;
   [key: string]: any;
 }
 
@@ -75,6 +81,9 @@ const TickSnapshotPage = () => {
   const [loading, setLoading] = useState(true);
   const [count, setCount] = useState(0);
 
+  // 资产类型 tab: 'future' | 'option'
+  const [assetType, setAssetType] = useState<'future' | 'option'>('future');
+
   // 过滤状态
   const [futureType, setFutureType] = useState<string>('ALL');
   const [selectedProduct, setSelectedProduct] = useState<string>('ALL');
@@ -95,7 +104,7 @@ const TickSnapshotPage = () => {
 
   const fetchData = async () => {
     try {
-      const result = await api.getLatestTicks('future', 500);
+      const result = await api.getLatestTicks(assetType, 500);
       setTicks((result as any).ticks || []);
       setCount((result as any).count || 0);
     } catch (err) {
@@ -109,7 +118,7 @@ const TickSnapshotPage = () => {
     fetchData();
     const interval = setInterval(fetchData, 2000);
     return () => clearInterval(interval);
-  }, []);
+  }, [assetType]);
 
   // 构建 symbol → future_type 映射
   const symbolTypeMap = useMemo(() => {
@@ -167,7 +176,24 @@ const TickSnapshotPage = () => {
           <div className='text-xl font-bold'>行情快照</div>
         </SubheaderLeft>
         <SubheaderRight>
-          <div className='text-sm text-zinc-500'>每 2 秒自动刷新</div>
+          <div className='flex gap-2'>
+            {(['future', 'option'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => {
+                  setAssetType(t);
+                  setFutureType('ALL');
+                  setSelectedProduct('ALL');
+                  setSearchSymbol('');
+                }}
+                className={`rounded px-3 py-1 text-sm ${
+                  assetType === t ? 'bg-blue-500 text-white' : 'bg-zinc-200 dark:bg-zinc-700'
+                }`}>
+                {t === 'future' ? '期货' : '期权'}
+              </button>
+            ))}
+            <span className='text-sm text-zinc-500'>每 2 秒自动刷新</span>
+          </div>
         </SubheaderRight>
       </Subheader>
       <Container>
@@ -175,49 +201,53 @@ const TickSnapshotPage = () => {
         <Card className='mb-4'>
           <CardBody>
             <div className='flex flex-wrap items-center gap-3'>
-              {/* 期货分类 */}
-              <div className='flex gap-1'>
-                <button
-                  onClick={() => {
-                    setFutureType('ALL');
-                    setSelectedProduct('ALL');
-                  }}
-                  className={`rounded px-3 py-1 text-sm ${
-                    futureType === 'ALL'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-zinc-200 dark:bg-zinc-700'
-                  }`}>
-                  全部
-                </button>
-                {Object.entries(FUTURE_TYPE_LABELS).map(([key, label]) => (
-                  <button
-                    key={key}
-                    onClick={() => {
-                      setFutureType(key);
-                      setSelectedProduct('ALL');
-                    }}
-                    className={`rounded px-3 py-1 text-sm ${
-                      futureType === key
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-zinc-200 dark:bg-zinc-700'
-                    }`}>
-                    {label}
-                  </button>
-                ))}
-              </div>
+              {assetType === 'future' && (
+                <>
+                  {/* 期货分类 */}
+                  <div className='flex gap-1'>
+                    <button
+                      onClick={() => {
+                        setFutureType('ALL');
+                        setSelectedProduct('ALL');
+                      }}
+                      className={`rounded px-3 py-1 text-sm ${
+                        futureType === 'ALL'
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-zinc-200 dark:bg-zinc-700'
+                      }`}>
+                      全部
+                    </button>
+                    {Object.entries(FUTURE_TYPE_LABELS).map(([key, label]) => (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          setFutureType(key);
+                          setSelectedProduct('ALL');
+                        }}
+                        className={`rounded px-3 py-1 text-sm ${
+                          futureType === key
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-zinc-200 dark:bg-zinc-700'
+                        }`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
 
-              {/* 品种过滤 */}
-              <select
-                value={selectedProduct}
-                onChange={(e) => setSelectedProduct(e.target.value)}
-                className='rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800'>
-                <option value='ALL'>全部品种</option>
-                {productOptions.map((p) => (
-                  <option key={p.product_id} value={p.product_id}>
-                    {p.product_id} ({p.name}) - {FUTURE_TYPE_LABELS[p.future_type]}
-                  </option>
-                ))}
-              </select>
+                  {/* 品种过滤 */}
+                  <select
+                    value={selectedProduct}
+                    onChange={(e) => setSelectedProduct(e.target.value)}
+                    className='rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800'>
+                    <option value='ALL'>全部品种</option>
+                    {productOptions.map((p) => (
+                      <option key={p.product_id} value={p.product_id}>
+                        {p.product_id} ({p.name}) - {FUTURE_TYPE_LABELS[p.future_type]}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
 
               {/* 合约搜索 */}
               <input
@@ -241,16 +271,33 @@ const TickSnapshotPage = () => {
             <table className='w-full text-sm'>
               <thead className='border-b border-zinc-200 dark:border-zinc-700'>
                 <tr className='text-left text-zinc-500'>
-                  <th className='px-3 py-2'>分类</th>
-                  <th className='px-3 py-2'>合约代码</th>
-                  <th className='px-3 py-2 text-right'>最新价</th>
-                  <th className='px-3 py-2 text-right'>成交量</th>
-                  <th className='px-3 py-2 text-right'>持仓量</th>
-                  <th className='px-3 py-2 text-right'>买一价</th>
-                  <th className='px-3 py-2 text-right'>买一量</th>
-                  <th className='px-3 py-2 text-right'>卖一价</th>
-                  <th className='px-3 py-2 text-right'>卖一量</th>
-                  <th className='px-3 py-2'>更新时间</th>
+                  {assetType === 'future' ? (
+                    <>
+                      <th className='px-3 py-2'>分类</th>
+                      <th className='px-3 py-2'>合约代码</th>
+                      <th className='px-3 py-2 text-right'>最新价</th>
+                      <th className='px-3 py-2 text-right'>成交量</th>
+                      <th className='px-3 py-2 text-right'>持仓量</th>
+                      <th className='px-3 py-2 text-right'>买一价</th>
+                      <th className='px-3 py-2 text-right'>买一量</th>
+                      <th className='px-3 py-2 text-right'>卖一价</th>
+                      <th className='px-3 py-2 text-right'>卖一量</th>
+                      <th className='px-3 py-2'>更新时间</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className='px-3 py-2'>合约代码</th>
+                      <th className='px-3 py-2'>类型</th>
+                      <th className='px-3 py-2'>标的</th>
+                      <th className='px-3 py-2 text-right'>行权价</th>
+                      <th className='px-3 py-2 text-right'>最新价</th>
+                      <th className='px-3 py-2 text-right'>成交量</th>
+                      <th className='px-3 py-2 text-right'>持仓量</th>
+                      <th className='px-3 py-2 text-right'>买一价</th>
+                      <th className='px-3 py-2 text-right'>卖一价</th>
+                      <th className='px-3 py-2'>更新时间</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -268,20 +315,67 @@ const TickSnapshotPage = () => {
                   </tr>
                 ) : (
                   filteredTicks.map((tick) => {
-                    const ft = getFutureType(tick.symbol);
+                    if (assetType === 'future') {
+                      const ft = getFutureType(tick.symbol);
+                      return (
+                        <tr
+                          key={tick.symbol}
+                          className='border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50'>
+                          <td className='px-3 py-2'>
+                            <Badge
+                              color={FUTURE_TYPE_COLORS[ft] as any}
+                              colorIntensity='500'
+                              className='text-xs'>
+                              {FUTURE_TYPE_LABELS[ft]}
+                            </Badge>
+                          </td>
+                          <td className='px-3 py-2 font-mono font-bold'>{tick.symbol}</td>
+                          <td className='px-3 py-2 text-right font-mono text-blue-500'>
+                            {formatPrice(tick.last_price)}
+                          </td>
+                          <td className='px-3 py-2 text-right font-mono'>
+                            {formatNum(tick.volume)}
+                          </td>
+                          <td className='px-3 py-2 text-right font-mono'>
+                            {formatNum(tick.open_interest)}
+                          </td>
+                          <td className='px-3 py-2 text-right font-mono'>
+                            {formatPrice(tick.bid_price_1)}
+                          </td>
+                          <td className='px-3 py-2 text-right font-mono'>
+                            {tick.bid_volume_1 ?? '-'}
+                          </td>
+                          <td className='px-3 py-2 text-right font-mono'>
+                            {formatPrice(tick.ask_price_1)}
+                          </td>
+                          <td className='px-3 py-2 text-right font-mono'>
+                            {tick.ask_volume_1 ?? '-'}
+                          </td>
+                          <td className='px-3 py-2 font-mono text-xs text-zinc-500'>
+                            {formatTime(tick.trade_date, tick.update_time)}
+                          </td>
+                        </tr>
+                      );
+                    }
+                    // 期权行
                     return (
                       <tr
                         key={tick.symbol}
                         className='border-b border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50'>
-                        <td className='px-3 py-2'>
-                          <Badge
-                            color={FUTURE_TYPE_COLORS[ft] as any}
-                            colorIntensity='500'
-                            className='text-xs'>
-                            {FUTURE_TYPE_LABELS[ft]}
-                          </Badge>
-                        </td>
                         <td className='px-3 py-2 font-mono font-bold'>{tick.symbol}</td>
+                        <td className='px-3 py-2'>
+                          <span className={`rounded px-2 py-0.5 text-xs ${
+                            tick.type === 'C'
+                              ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'
+                              : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                          }`}>
+                            {tick.type === 'C' ? '购' : '沽'}
+                          </span>
+                        </td>
+                        <td className='px-3 py-2 font-mono text-xs'>{tick.underlying || '-'}</td>
+                        <td className='px-3 py-2 text-right font-mono'>
+                          {tick.strike ? (tick.strike / 10000).toFixed(2) : '-'}
+                        </td>
                         <td className='px-3 py-2 text-right font-mono text-blue-500'>
                           {formatPrice(tick.last_price)}
                         </td>
@@ -295,13 +389,7 @@ const TickSnapshotPage = () => {
                           {formatPrice(tick.bid_price_1)}
                         </td>
                         <td className='px-3 py-2 text-right font-mono'>
-                          {tick.bid_volume_1 ?? '-'}
-                        </td>
-                        <td className='px-3 py-2 text-right font-mono'>
                           {formatPrice(tick.ask_price_1)}
-                        </td>
-                        <td className='px-3 py-2 text-right font-mono'>
-                          {tick.ask_volume_1 ?? '-'}
                         </td>
                         <td className='px-3 py-2 font-mono text-xs text-zinc-500'>
                           {formatTime(tick.trade_date, tick.update_time)}

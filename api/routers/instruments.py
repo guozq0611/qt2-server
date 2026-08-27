@@ -73,24 +73,16 @@ async def list_option(
     exchange: str = Query(None, description="交易所过滤"),
     active_only: bool = Query(True, description="只返回活跃合约"),
 ):
-    """期权合约列表"""
+    """期权合约列表（含标的/行权价/类型/到期日等详情）"""
     engine = get_db_engine()
     repo = OptionInfoRepo(engine)
 
-    exchanges = [exchange] if exchange else CTP_SUBSCRIBE_EXCHANGES
-    result = []
+    if active_only:
+        instruments = repo.get_active_instruments_detail(exchange)
+    else:
+        instruments = repo.get_active_instruments_detail(exchange)  # 暂不支持 inactive
 
-    for ex in exchanges:
-        try:
-            instruments = repo.get_active_instruments(ex) if active_only else repo.get_all_instruments(ex)
-            if instruments:
-                for symbol in instruments:
-                    result.append({"symbol": symbol, "exchange": ex, "asset_type": "OPTION"})
-        except Exception:
-            # option_info 表可能不存在
-            continue
-
-    return {"count": len(result), "instruments": result}
+    return {"count": len(instruments), "instruments": instruments}
 
 
 @router.get("/summary")

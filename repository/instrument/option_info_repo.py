@@ -37,6 +37,55 @@ class OptionInfoRepo:
             # 表可能尚未创建
             return []
 
+    def get_active_instruments_detail(self, exchange_id: str = None) -> List[dict]:
+        """获取活跃期权合约详情（含标的/行权价/类型/到期日等）"""
+        if exchange_id:
+            sql = f"""
+            SELECT instrument_id, exchange_id, instrument_name, underlying_symbol,
+                   contract_type, strike_price, multiplier, tick_size,
+                   delivery_month, expiry_date, list_date, delist_date
+            FROM {self.TABLE}
+            WHERE exchange_id = :exchange_id
+              AND status = 1
+              AND delist_date >= CURRENT_DATE
+            ORDER BY underlying_symbol, expiry_date, strike_price
+            """
+            params = {"exchange_id": exchange_id}
+        else:
+            sql = f"""
+            SELECT instrument_id, exchange_id, instrument_name, underlying_symbol,
+                   contract_type, strike_price, multiplier, tick_size,
+                   delivery_month, expiry_date, list_date, delist_date
+            FROM {self.TABLE}
+            WHERE status = 1
+              AND delist_date >= CURRENT_DATE
+            ORDER BY exchange_id, underlying_symbol, expiry_date, strike_price
+            """
+            params = {}
+
+        result_list = []
+        try:
+            with self.engine.connect() as conn:
+                rows = conn.execute(text(sql), params)
+                for row in rows:
+                    result_list.append({
+                        "symbol": row[0],
+                        "exchange": row[1],
+                        "name": row[2],
+                        "underlying": row[3],
+                        "contract_type": row[4],
+                        "strike_price": float(row[5]) if row[5] else 0,
+                        "multiplier": float(row[6]) if row[6] else 1,
+                        "tick_size": float(row[7]) if row[7] else 0,
+                        "delivery_month": row[8],
+                        "expiry_date": str(row[9]) if row[9] else None,
+                        "list_date": str(row[10]) if row[10] else None,
+                        "delist_date": str(row[11]) if row[11] else None,
+                    })
+        except Exception:
+            pass
+        return result_list
+
     def get_option_meta_map(self, exchange_id: str = None) -> Dict[str, dict]:
         """
         获取期权元数据映射
