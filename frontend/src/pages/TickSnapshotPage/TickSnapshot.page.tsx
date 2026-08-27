@@ -195,7 +195,7 @@ const TickSnapshotPage = () => {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 2000);
+    const interval = setInterval(fetchData, 1000);
     return () => clearInterval(interval);
   }, [assetType]);
 
@@ -309,7 +309,7 @@ const TickSnapshotPage = () => {
                 {t === 'future' ? '期货' : '期权'}
               </button>
             ))}
-            <span className='text-sm text-zinc-500'>每 2 秒自动刷新</span>
+            <span className='text-sm text-zinc-500'>每 1 秒自动刷新</span>
           </div>
         </SubheaderRight>
       </Subheader>
