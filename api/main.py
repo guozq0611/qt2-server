@@ -1,3 +1,5 @@
+import asyncio
+
 """
 qt2-server 监控 API（FastAPI）
 
@@ -24,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from api.routers import monitor, instruments, files, config
+from api import websocket as ws_module
 
 
 app = FastAPI(
@@ -57,6 +60,13 @@ app.include_router(monitor.router, prefix="/api/monitor", tags=["监控"])
 app.include_router(instruments.router, prefix="/api/instruments", tags=["合约"])
 app.include_router(files.router, prefix="/api/files", tags=["文件"])
 app.include_router(config.router, prefix="/api/config", tags=["配置"])
+app.include_router(ws_module.router, prefix="/api/ws", tags=["WebSocket"])
+
+
+# WebSocket 行情广播初始化
+@app.on_event("startup")
+async def startup_websocket():
+    ws_module.init_websocket(asyncio.get_event_loop())
 
 
 # ===== 前端静态文件托管 =====

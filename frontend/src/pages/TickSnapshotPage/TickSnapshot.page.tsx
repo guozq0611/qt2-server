@@ -156,7 +156,6 @@ const TickSnapshotPage = () => {
       const result = await api.getLatestTicks(assetType, 500, params);
       const newTicks = (result as any).ticks || [];
       setTicks(newTicks);
-      setCount((result as any).count || 0);
 
       // 计算价格涨跌：与上一次最新价对比
       const newStates: Record<string, PriceChangeState> = {};
@@ -205,11 +204,106 @@ const TickSnapshotPage = () => {
     selectedOptionProduct,
   ]);
 
+  // 从 ticks 自动更新 count
   useEffect(() => {
+    setCount(ticks.length);
+  }, [ticks]);
+
+  // 单个 tick 的价格涨跌更新
+  const updatePriceState = (tick: TickData) => {
+    const current = tick.last_price;
+    const previous = prevPricesRef.current[tick.symbol];
+    const old = priceStates[tick.symbol];
+
+    let direction: 'up' | 'down' | 'same' = old?.direction || 'same';
+    if (current !== undefined && previous !== undefined) {
+      if (current > previous) direction = 'up';
+      else if (current < previous) direction = 'down';
+      else direction = old?.direction || 'same';
+    }
+
+    const flash = direction !== 'same';
+    setPriceStates((states) => ({
+      ...states,
+      [tick.symbol]: { direction, flash },
+    }));
+    prevPricesRef.current = { ...prevPricesRef.current, [tick.symbol]: current ?? 0 };
+
+    if (flash) {
+      setTimeout(() => {
+        setPriceStates((states) => ({
+          ...states,
+          [tick.symbol]: { ...states[tick.symbol], flash: false },
+        }));
+      }, 600);
+    }
+  };
+
+  // WebSocket 实时行情
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let active = true;
+
+    const params: { future_type?: string; option_type?: string; product_id?: string } = {};
+    if (assetType === 'future' && futureType !== 'ALL') params.future_type = futureType;
+    if (assetType === 'option' && optionType !== 'ALL') params.option_type = optionType;
+    if (assetType === 'future' && selectedProduct !== 'ALL') params.product_id = selectedProduct;
+    if (assetType === 'option' && selectedOptionProduct !== 'ALL') params.product_id = selectedOptionProduct;
+
+    // 先 REST 加载一次快照
     fetchData();
-    const interval = setInterval(fetchData, 1000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const query = new URLSearchParams();
+    if (params.future_type) query.append('future_type', params.future_type);
+    if (params.option_type) query.append('option_type', params.option_type);
+    if (params.product_id) query.append('product_id', params.product_id);
+    const qs = query.toString();
+    const wsUrl = `${protocol}//${window.location.host}/api/ws/ticks/${assetType}${qs ? '?' + qs : ''}`;
+
+    ws = new WebSocket(wsUrl);
+    ws.onopen = () => {
+      if (active) setLoading(false);
+    };
+    ws.onmessage = (event) => {
+      if (!active) return;
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.event === 'pong') return;
+        if (msg.event !== 'tick' || !msg.tick) return;
+        const tick: TickData = msg.tick;
+
+        setTicks((prev) => {
+          const index = prev.findIndex((t) => t.symbol === tick.symbol);
+          const next = index >= 0 ? [...prev] : [...prev];
+          if (index >= 0) {
+            next[index] = tick;
+          } else {
+            next.push(tick);
+          }
+          next.sort((a, b) => a.symbol.localeCompare(b.symbol));
+          return next;
+        });
+
+        updatePriceState(tick);
+      } catch (err) {
+        console.error('WebSocket message error:', err);
+      }
+    };
+    ws.onerror = (err) => {
+      console.error('WebSocket error:', err);
+    };
+    ws.onclose = () => {
+      if (active) setLoading(true);
+    };
+
+    return () => {
+      active = false;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    };
+  }, [fetchData, assetType, futureType, selectedProduct, optionType, selectedOptionProduct]);
 
   // 构建 symbol → future_type 映射
   const symbolTypeMap = useMemo(() => {
@@ -321,7 +415,7 @@ const TickSnapshotPage = () => {
                 {t === 'future' ? '期货' : '期权'}
               </button>
             ))}
-            <span className='text-sm text-zinc-500'>每 1 秒自动刷新</span>
+            <span className='text-sm text-zinc-500'>WebSocket 实时推送</span>
           </div>
         </SubheaderRight>
       </Subheader>
