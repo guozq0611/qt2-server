@@ -18,10 +18,18 @@ interface FilesStats {
   option: { file_count: number; total_size_mb: number; total_records: number };
 }
 
+interface DirectoryInfo {
+  name: string;
+  label: string;
+  is_current: boolean;
+}
+
 const FilesPage = () => {
   const [stats, setStats] = useState<FilesStats | null>(null);
   const [files, setFiles] = useState<FileInfo[]>([]);
+  const [directories, setDirectories] = useState<DirectoryInfo[]>([]);
   const [assetType, setAssetType] = useState('future');
+  const [selectedDir, setSelectedDir] = useState('current');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,10 +44,29 @@ const FilesPage = () => {
     fetchStats();
   }, []);
 
+  // 加载目录列表
+  useEffect(() => {
+    const fetchDirs = async () => {
+      try {
+        const result = await api.getFilesDirectories(assetType);
+        const dirs = (result as any).directories || [];
+        setDirectories(dirs);
+        // 如果当前选的目录不在列表里，切到 current
+        if (dirs.length > 0 && !dirs.find((d: DirectoryInfo) => d.name === selectedDir)) {
+          setSelectedDir('current');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchDirs();
+  }, [assetType]);
+
+  // 加载文件列表
   useEffect(() => {
     const fetchFiles = async () => {
       try {
-        const result = await api.getFilesList(assetType);
+        const result = await api.getFilesList(assetType, selectedDir);
         setFiles((result as any).files || []);
       } catch (err) {
         console.error(err);
@@ -48,7 +75,7 @@ const FilesPage = () => {
       }
     };
     fetchFiles();
-  }, [assetType]);
+  }, [assetType, selectedDir]);
 
   return (
     <PageWrapper>
@@ -59,14 +86,20 @@ const FilesPage = () => {
         <SubheaderRight>
           <div className='flex gap-2'>
             <button
-              onClick={() => setAssetType('future')}
+              onClick={() => {
+                setAssetType('future');
+                setSelectedDir('current');
+              }}
               className={`rounded px-3 py-1 text-sm ${
                 assetType === 'future' ? 'bg-blue-500 text-white' : 'bg-zinc-200 dark:bg-zinc-700'
               }`}>
               期货
             </button>
             <button
-              onClick={() => setAssetType('option')}
+              onClick={() => {
+                setAssetType('option');
+                setSelectedDir('current');
+              }}
               className={`rounded px-3 py-1 text-sm ${
                 assetType === 'option' ? 'bg-blue-500 text-white' : 'bg-zinc-200 dark:bg-zinc-700'
               }`}>
@@ -107,8 +140,33 @@ const FilesPage = () => {
           </div>
         )}
 
-        {/* 文件列表 */}
+        {/* 目录选择 + 文件列表 */}
         <Card>
+          <CardBody className='p-4'>
+            {/* 目录下拉框 */}
+            <div className='mb-4 flex items-center gap-3'>
+              <span className='text-sm text-zinc-500'>目录</span>
+              <select
+                value={selectedDir}
+                onChange={(e) => setSelectedDir(e.target.value)}
+                className='rounded border border-zinc-300 bg-white px-3 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800'>
+                {directories.length === 0 ? (
+                  <option value='current'>current</option>
+                ) : (
+                  directories.map((d) => (
+                    <option key={d.name} value={d.name}>
+                      {d.is_current ? `${d.label} (current)` : d.label}
+                    </option>
+                  ))
+                )}
+              </select>
+              <span className='text-xs text-zinc-400'>
+                {selectedDir === 'current'
+                  ? '当前交易日实时写入'
+                  : '历史归档（可导入数据库）'}
+              </span>
+            </div>
+          </CardBody>
           <CardBody className='overflow-x-auto p-0'>
             <table className='w-full text-sm'>
               <thead className='border-b border-zinc-200 dark:border-zinc-700'>

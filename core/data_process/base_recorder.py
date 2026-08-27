@@ -59,8 +59,9 @@ class BaseRecorder:
         # Redis 监控
         self.redis_client = RedisClient().get_client()
 
-        # 落盘目录
-        os.makedirs(self.data_dir, exist_ok=True)
+        # 落盘目录：current/ 用于实时写入，YYYYMMDD/ 用于历史归档
+        self.current_dir = os.path.join(self.data_dir, "current")
+        os.makedirs(self.current_dir, exist_ok=True)
 
         # 运行状态
         self.is_running = False
@@ -70,10 +71,15 @@ class BaseRecorder:
         self.last_tick_time = ""
         self.latest_ticks_cache = {}
 
-        # 序列号管理
-        self.today_str = datetime.now().strftime("%Y%m%d")
+        # 交易日：先用系统日期占位，第一个 tick 到达后用 tick_obj.trade_date 校正
+        # 夜盘 21:00 开始的行情，trade_date 是下一交易日，文件名和归档都归 trade_date
+        self.trade_date_str = datetime.now().strftime("%Y%m%d")
         self.current_run_id = 1
         self.current_seq = 1
+
+        # 启动时归档历史文件（把 current/ 里非当天的文件移到 {trade_date}/）
+        self._archive_old_files()
+
         self._init_sequence_number()
 
         # 启动主线程和监控线程
@@ -84,8 +90,39 @@ class BaseRecorder:
         self.thread.start()
         self.monitor_thread.start()
 
+    def _archive_old_files(self):
+        """启动时把 current/ 里不属于当前 trade_date 的文件归档到 {trade_date}/ 目录"""
+        if not os.path.isdir(self.current_dir):
+            return
+
+        for fname in os.listdir(self.current_dir):
+            if not fname.endswith('.bin'):
+                continue
+            # 从文件名提取 trade_date: {asset_type}_l1_tick_{YYYYMMDD}_R...
+            parts = fname.split('_')
+            file_trade_date = None
+            for part in parts:
+                if len(part) == 8 and part.isdigit():
+                    file_trade_date = part
+                    break
+
+            if file_trade_date is None:
+                continue
+
+            # 如果文件名的 trade_date 跟当前 trade_date 不同，归档
+            if file_trade_date != self.trade_date_str:
+                archive_dir = os.path.join(self.data_dir, file_trade_date)
+                os.makedirs(archive_dir, exist_ok=True)
+                src = os.path.join(self.current_dir, fname)
+                dst = os.path.join(archive_dir, fname)
+                try:
+                    os.rename(src, dst)
+                    Logger.info(f"[{self.asset_type}] 归档历史文件: {fname} -> {file_trade_date}/")
+                except Exception as e:
+                    Logger.warning(f"[{self.asset_type}] 归档失败 {fname}: {e}")
+
     def _init_sequence_number(self):
-        pattern = os.path.join(self.data_dir, f"{self.asset_type}_l1_tick_{self.today_str}_R*.bin")
+        pattern = os.path.join(self.current_dir, f"{self.asset_type}_l1_tick_{self.trade_date_str}_R*.bin")
         existing_files = glob.glob(pattern)
 
         max_run_id = 0
@@ -102,7 +139,7 @@ class BaseRecorder:
 
         self.current_run_id = max_run_id + 1
         self.current_seq = 1
-        Logger.info(f"[{self.asset_type}] 今日第 {self.current_run_id} 次启动录制引擎，历史批次扫描完毕。")
+        Logger.info(f"[{self.asset_type}] 交易日 {self.trade_date_str} 第 {self.current_run_id} 次启动录制引擎，历史批次扫描完毕。")
 
     def _open_new_file(self):
         if self.current_file:
@@ -110,16 +147,10 @@ class BaseRecorder:
 
         self.current_records_count = 0
 
-        now_date_str = datetime.now().strftime("%Y%m%d")
-        if now_date_str != self.today_str:
-            self.today_str = now_date_str
-            self.current_run_id = 1
-            self.current_seq = 1
-
         now_time_str = datetime.now().strftime("%H%M%S")
-        filename = f"{self.asset_type}_l1_tick_{self.today_str}_R{self.current_run_id}_{now_time_str}_{self.current_seq:03d}.bin"
+        filename = f"{self.asset_type}_l1_tick_{self.trade_date_str}_R{self.current_run_id}_{now_time_str}_{self.current_seq:03d}.bin"
 
-        self.bin_path = os.path.join(self.data_dir, filename)
+        self.bin_path = os.path.join(self.current_dir, filename)
         self.current_file = open(self.bin_path, 'ab')
 
         Logger.info(f"[{self.asset_type}] 开启行情录制切片: {filename}")
@@ -135,6 +166,20 @@ class BaseRecorder:
                 # 类型过滤：跳过不属于本录制器的 tick（共享队列场景）
                 if self.TICK_CLASS is not None and not isinstance(tick_obj, self.TICK_CLASS):
                     continue
+
+                # 用 tick 的 trade_date 校正交易日（夜盘 21:00 的 trade_date 是下一交易日）
+                tick_trade_date = str(tick_obj.trade_date) if tick_obj.trade_date else None
+                if tick_trade_date and tick_trade_date != self.trade_date_str:
+                    # trade_date 变了（跨日或夜盘开始），归档旧文件并切换
+                    self._archive_old_files()
+                    self.trade_date_str = tick_trade_date
+                    self.current_run_id = 1
+                    self.current_seq = 1
+                    Logger.info(f"[{self.asset_type}] 交易日切换为 {self.trade_date_str}，重新初始化序列号")
+                    self._init_sequence_number()
+                    self.current_file.flush()
+                    self.current_file.close()
+                    self._open_new_file()
 
                 # 子类提供：从 tick 对象提取按 fields_spec 顺序的字段值
                 pack_values = self._extract_pack_values(tick_obj)

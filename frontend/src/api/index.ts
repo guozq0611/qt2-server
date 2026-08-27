@@ -32,8 +32,10 @@ export const getOptionProducts = () => apiClient.get('/instruments/option/produc
 export const getInstrumentsSummary = () => apiClient.get('/instruments/summary');
 
 // ===== 文件 =====
-export const getFilesList = (assetType: string, date?: string) =>
-  apiClient.get('/files/list', { params: { asset_type: assetType, date } });
+export const getFilesList = (assetType: string, directory: string = 'current') =>
+  apiClient.get('/files/list', { params: { asset_type: assetType, directory } });
+export const getFilesDirectories = (assetType: string) =>
+  apiClient.get('/files/directories', { params: { asset_type: assetType } });
 export const getFilesStats = () => apiClient.get('/files/stats');
 
 // ===== 配置 =====
@@ -51,6 +53,7 @@ export default {
   getOptionProducts,
   getInstrumentsSummary,
   getFilesList,
+  getFilesDirectories,
   getFilesStats,
   getConfig,
 };
