@@ -114,8 +114,14 @@ async def latest_ticks(
         except json.JSONDecodeError:
             continue
 
-    # 按 update_time 降序排序
-    ticks.sort(key=lambda x: (x.get("update_time", ""), x.get("symbol", "")), reverse=True)
+    # 排序策略：
+    # - 无过滤（全部）: 按 update_time 降序，最活跃在前
+    # - 有分类/品种过滤: 按 symbol 升序，便于按交割日/行权价阅读
+    has_filter = future_type or option_type or filter_product
+    if has_filter:
+        ticks.sort(key=lambda x: x.get("symbol", ""))
+    else:
+        ticks.sort(key=lambda x: (x.get("update_time", ""), x.get("symbol", "")), reverse=True)
 
     if limit > 0:
         ticks = ticks[:limit]
