@@ -1,6 +1,6 @@
 """
 Tushare API 封装（精简版）
-- 仅保留 qt2-server 需要的 future_info 和 trade_calendar 数据获取
+- 仅保留 qt2-server 需要的 future_info、option_info 和 trade_calendar 数据获取
 - 迁移自 quantlab/core/wrapper/tushare_wrapper.py
 """
 import time
@@ -155,6 +155,56 @@ class TushareWrapper:
             'name': 'instrument_name',
             'fut_code': 'product_id',
             'd_month': 'delivery_month',
+        })
+
+        # 剔除 Tushare 原始冗余字段
+        cols_to_drop = ['ts_code', 'symbol', 'exchange']
+        df = df.drop(columns=cols_to_drop, errors='ignore')
+
+        return df
+
+    def get_option_info(self, exchanges: List[str] = None) -> pd.DataFrame:
+        """
+        获取期权合约基础信息（Tushare opt_basic 接口）
+        需要 5000 积分
+
+        :param exchanges: 交易所列表，默认全部期货期权交易所
+        :return: DataFrame，包含 instrument_id, exchange_id, instrument_name,
+                 underlying_symbol, call_put, exercise_price, opt_multiplier,
+                 maturity_date, list_date, delist_date 等
+        """
+        # 期权交易所：CFFEX(股指期权), DCE(商品期权), CZCE(商品期权), SHFE(商品期权), INE(商品期权)
+        # SSE/SZSE 是股票期权，走 CTP 股票期权柜台，不在本期支持范围
+        if exchanges is None or len(exchanges) == 0:
+            exchanges = ['CFFEX', 'DCE', 'CZCE', 'SHFE', 'INE']
+
+        fetch_result = []
+        for exchange_id in exchanges:
+            try:
+                res = self.ts_pro.opt_basic(exchange=exchange_id)
+                if res is not None and not res.empty:
+                    fetch_result.append(res)
+            except Exception as e:
+                Logger.error(f"获取 {exchange_id} 期权基础信息失败: {e}")
+
+        if not fetch_result:
+            return pd.DataFrame()
+
+        df = pd.concat(fetch_result, ignore_index=True)
+
+        # 标准化 CTP 代码（期权 ts_code 格式与期货一致，如 IO2603-C-3900.CFX）
+        df = self._standardize_ctp_symbol(df, code_col='ts_code')
+
+        # 字段名标准化
+        df = df.rename(columns={
+            'name': 'instrument_name',
+            'opt_code': 'underlying_symbol',    # 标的合约代码
+            'call_put': 'contract_type',         # 'C' 认购 / 'P' 认沽
+            'exercise_price': 'strike_price',    # 行权价
+            'opt_multiplier': 'multiplier',      # 合约单位（期权里叫 multiplier）
+            's_month': 'delivery_month',         # 结算月
+            'maturity_date': 'expiry_date',      # 到期日
+            'min_price_chg': 'tick_size',        # 最小价格波幅
         })
 
         # 剔除 Tushare 原始冗余字段

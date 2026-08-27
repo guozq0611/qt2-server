@@ -228,11 +228,26 @@ def build_ctp_config(asset_types: list) -> dict:
 
     Logger.info(f"✅ 合约清洗完成，共生成 {len(cleaned_subscribe_list)} 个 CTP 标准订阅代码")
 
+    # 加载期权元数据映射（用于网关填充 OptionLevel1TickData 专属字段）
+    option_meta_map = {}
+    if 'OPTION' in asset_types:
+        engine = get_db_engine()
+        option_repo = OptionInfoRepo(engine)
+        raw_meta_map = option_repo.get_option_meta_map()  # 全交易所
+        # 清洗 key 为 CTP 标准格式
+        for symbol, meta in raw_meta_map.items():
+            exchange = symbol_exchange_map.get(symbol, '')
+            format_func = exchange_case_rules.get(exchange.upper(), lambda x: x)
+            ctp_symbol = format_func(symbol)
+            option_meta_map[ctp_symbol] = meta
+        Logger.info(f"✅ 期权元数据加载完成，共 {len(option_meta_map)} 个合约")
+
     return {
         "front_address": CTP_MD_FRONT_ADDRESS,
         "subscribe_list": cleaned_subscribe_list,
         "symbol_exchange_map": cleaned_symbol_exchange_map,
         "symbol_asset_type_map": cleaned_symbol_asset_type_map,
+        "option_meta_map": option_meta_map,
     }
 
 

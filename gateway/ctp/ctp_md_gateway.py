@@ -34,6 +34,9 @@ class CtpMdGateway(BaseMdGateway, mdapi.CThostFtdcMdSpi):
         # 资产类型映射：instrument_id -> 'FUTURE' / 'OPTION'
         # 用于区分回调中收到的 tick 应该构造成 FutureLevel1TickData 还是 OptionLevel1TickData
         self.symbol_asset_type_map = self.config.get("symbol_asset_type_map", {})
+        # 期权元数据映射：instrument_id -> {underlying_symbol, strike_price, contract_type, expiry_date}
+        # 用于填充 OptionLevel1TickData 的期权专属字段
+        self.option_meta_map = self.config.get("option_meta_map", {})
 
     def connect(self):
         """外部调用：发起连接"""
@@ -176,10 +179,16 @@ class CtpMdGateway(BaseMdGateway, mdapi.CThostFtdcMdSpi):
         asset_type = self.symbol_asset_type_map.get(instrument_id, 'FUTURE')
 
         if asset_type == 'OPTION':
-            tick_obj = OptionLevel1TickData(**common_fields)
-            # 期权专属字段：CTP 行情不推送 Greeks，这里留默认值
-            # underlying_symbol / strike_price / contract_type / expiry_date
-            # 由下游从 option_info 表查询后填充
+            # 从 option_meta_map 填充期权专属字段
+            meta = self.option_meta_map.get(instrument_id, {})
+            tick_obj = OptionLevel1TickData(
+                **common_fields,
+                underlying_symbol=meta.get('underlying_symbol', ''),
+                strike_price=meta.get('strike_price', 0),
+                contract_type=meta.get('contract_type', ''),
+                expiry_date=meta.get('expiry_date', 0),
+            )
+            # Greeks 字段 CTP 不推送，留默认值 0，由下游计算后填充
         else:
             tick_obj = FutureLevel1TickData(**common_fields)
 
