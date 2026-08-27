@@ -239,10 +239,15 @@ const TickSnapshotPage = () => {
     }
   };
 
-  // WebSocket 实时行情
+  // 实时行情：有过滤时 WebSocket，无过滤（全部）时 1 秒轮询
   useEffect(() => {
     let ws: WebSocket | null = null;
+    let interval: NodeJS.Timeout | null = null;
     let active = true;
+
+    const hasFilter =
+      (assetType === 'future' && (futureType !== 'ALL' || selectedProduct !== 'ALL')) ||
+      (assetType === 'option' && (optionType !== 'ALL' || selectedOptionProduct !== 'ALL'));
 
     const params: { future_type?: string; option_type?: string; product_id?: string } = {};
     if (assetType === 'future' && futureType !== 'ALL') params.future_type = futureType;
@@ -250,57 +255,67 @@ const TickSnapshotPage = () => {
     if (assetType === 'future' && selectedProduct !== 'ALL') params.product_id = selectedProduct;
     if (assetType === 'option' && selectedOptionProduct !== 'ALL') params.product_id = selectedOptionProduct;
 
-    // 先 REST 加载一次快照
+    // 先 REST 从 Redis 加载快照
     fetchData();
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const query = new URLSearchParams();
-    if (params.future_type) query.append('future_type', params.future_type);
-    if (params.option_type) query.append('option_type', params.option_type);
-    if (params.product_id) query.append('product_id', params.product_id);
-    const qs = query.toString();
-    const wsUrl = `${protocol}//${window.location.host}/api/ws/ticks/${assetType}${qs ? '?' + qs : ''}`;
+    if (hasFilter) {
+      // 具体品种/分类：WebSocket 实时推送
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const query = new URLSearchParams();
+      if (params.future_type) query.append('future_type', params.future_type);
+      if (params.option_type) query.append('option_type', params.option_type);
+      if (params.product_id) query.append('product_id', params.product_id);
+      const qs = query.toString();
+      const wsUrl = `${protocol}//${window.location.host}/api/ws/ticks/${assetType}${qs ? '?' + qs : ''}`;
 
-    ws = new WebSocket(wsUrl);
-    ws.onopen = () => {
-      if (active) setLoading(false);
-    };
-    ws.onmessage = (event) => {
-      if (!active) return;
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.event === 'pong') return;
-        if (msg.event !== 'tick' || !msg.tick) return;
-        const tick: TickData = msg.tick;
+      ws = new WebSocket(wsUrl);
+      ws.onopen = () => {
+        if (active) setLoading(false);
+      };
+      ws.onmessage = (event) => {
+        if (!active) return;
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.event === 'pong') return;
+          if (msg.event !== 'tick' || !msg.tick) return;
+          const tick: TickData = msg.tick;
 
-        setTicks((prev) => {
-          const index = prev.findIndex((t) => t.symbol === tick.symbol);
-          const next = index >= 0 ? [...prev] : [...prev];
-          if (index >= 0) {
-            next[index] = tick;
-          } else {
-            next.push(tick);
-          }
-          next.sort((a, b) => a.symbol.localeCompare(b.symbol));
-          return next;
-        });
+          setTicks((prev) => {
+            const index = prev.findIndex((t) => t.symbol === tick.symbol);
+            const next = index >= 0 ? [...prev] : [...prev];
+            if (index >= 0) {
+              next[index] = tick;
+            } else {
+              next.push(tick);
+            }
+            next.sort((a, b) => a.symbol.localeCompare(b.symbol));
+            return next;
+          });
 
-        updatePriceState(tick);
-      } catch (err) {
-        console.error('WebSocket message error:', err);
-      }
-    };
-    ws.onerror = (err) => {
-      console.error('WebSocket error:', err);
-    };
-    ws.onclose = () => {
-      if (active) setLoading(true);
-    };
+          updatePriceState(tick);
+        } catch (err) {
+          console.error('WebSocket message error:', err);
+        }
+      };
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', err);
+      };
+      ws.onclose = () => {
+        if (active) setLoading(true);
+      };
+    } else {
+      // 全部（无过滤）：1 秒轮询，避免推送全部合约造成浏览器压力
+      interval = setInterval(fetchData, 1000);
+      setLoading(false);
+    }
 
     return () => {
       active = false;
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.close();
+      }
+      if (interval) {
+        clearInterval(interval);
       }
     };
   }, [fetchData, assetType, futureType, selectedProduct, optionType, selectedOptionProduct]);
@@ -415,7 +430,14 @@ const TickSnapshotPage = () => {
                 {t === 'future' ? '期货' : '期权'}
               </button>
             ))}
-            <span className='text-sm text-zinc-500'>WebSocket 实时推送</span>
+            <span className='text-sm text-zinc-500'>
+              {(assetType === 'future' &&
+                (futureType !== 'ALL' || selectedProduct !== 'ALL')) ||
+              (assetType === 'option' &&
+                (optionType !== 'ALL' || selectedOptionProduct !== 'ALL'))
+                ? 'WebSocket 实时推送'
+                : '每 1 秒轮询（全部）'}
+            </span>
           </div>
         </SubheaderRight>
       </Subheader>
