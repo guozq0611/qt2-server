@@ -135,7 +135,9 @@ class BaseRecorder:
                 bin_data = self.tick_struct.pack(*pack_values)
 
                 # ZMQ 广播（topic: TICK.{asset_type}.{product_id}）
-                product_id = re.sub(r'\d+$', '', tick_obj.instrument_id).upper()
+                # 提取品种代码：期货 IF2609→IF，期权 IO2603-C-3900→IO
+                m = re.match(r'^[A-Za-z]+', tick_obj.instrument_id)
+                product_id = m.group().upper() if m else tick_obj.instrument_id.upper()
                 topic = f"TICK.{self.asset_type.upper()}.{product_id}"
                 self.zmq_publisher.publish(topic, bin_data)
 
