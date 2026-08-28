@@ -773,6 +773,9 @@ const TickSnapshotPage = () => {
                         <td className='px-3 py-2 text-right font-mono'>
                           {tick.ask_volume_1 ?? '-'}
                         </td>
+                        <td className='px-3 py-2 font-mono text-xs text-zinc-500'>
+                          {formatTime(tick.trade_date, tick.update_time)}
+                        </td>
                       </tr>
                     );
                   })
