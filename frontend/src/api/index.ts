@@ -29,6 +29,11 @@ export const getOptionInstruments = (params?: {
   option_type?: string;
 }) => apiClient.get('/instruments/option', { params: params || {} });
 export const getOptionProducts = () => apiClient.get('/instruments/option/products');
+export const getStockOptionInstruments = (params?: {
+  exchange?: string;
+  underlying?: string;
+}) => apiClient.get('/instruments/stock-option', { params: params || {} });
+export const getStockOptionUnderlyings = () => apiClient.get('/instruments/stock-option/underlyings');
 export const getInstrumentsSummary = () => apiClient.get('/instruments/summary');
 
 // ===== 文件 =====
@@ -51,6 +56,8 @@ export default {
   getFutureProducts,
   getOptionInstruments,
   getOptionProducts,
+  getStockOptionInstruments,
+  getStockOptionUnderlyings,
   getInstrumentsSummary,
   getFilesList,
   getFilesDirectories,

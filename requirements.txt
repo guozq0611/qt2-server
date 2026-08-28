@@ -1,5 +1,7 @@
-# CTP 行情接口（openctp_ctp PyPI 包）
+# CTP 行情接口（openctp_ctp PyPI 包，期货+期货期权）
 openctp_ctp
+# CTP 股票期权行情接口（openctp_ctpopt PyPI 包，股票 ETF 期权）
+openctp_ctpopt
 
 # ZeroMQ 行情分发
 pyzmq

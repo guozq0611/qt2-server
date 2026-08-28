@@ -44,23 +44,28 @@ from core.util.process_util import ProcessUtil
 from core.setting.setting import (
     GATEWAYS, ZMQ_BIND_URL, DATA_DIR,
     CTP_MD_FRONT_ADDRESS, CTP_SUBSCRIBE_EXCHANGES, CTP_SUBSCRIBE_ASSET_TYPES,
+    CTP_STOCK_OPTION_MD_FRONT_ADDRESS, CTP_SUBSCRIBE_STOCK_OPTION_EXCHANGES,
 )
 from repository.trade_calendar_repo import TradeCalendarRepo
 from repository.instrument.future_info_repo import FutureInfoRepo
 from repository.instrument.option_info_repo import OptionInfoRepo
+from repository.instrument.stock_option_info_repo import StockOptionInfoRepo
 
 # 网关注册表（配置驱动，按 gateways 列表启动）
 from gateway.ctp.ctp_md_gateway import CtpMdGateway
+from gateway.ctp.ctp_stock_option_md_gateway import CtpStockOptionMdGateway
 # from gateway.stock_l2.stock_l2_gateway import StockL2Gateway    # 未来
 
 # 录制器
 from data_process.future_tick_recorder import FutureTickRecorder
 from data_process.option_tick_recorder import OptionTickRecorder
+from data_process.stock_option_tick_recorder import StockOptionTickRecorder
 # from data_process.stock_l2_recorder import StockL2Recorder      # 未来
 
 # 网关注册表
 GATEWAY_REGISTRY = {
     "ctp": CtpMdGateway,
+    "ctp_stock_option": CtpStockOptionMdGateway,
     # "stock_l2": StockL2Gateway,    # 未来
 }
 
@@ -68,6 +73,7 @@ GATEWAY_REGISTRY = {
 RECORDER_REGISTRY = {
     "FUTURE": (FutureTickRecorder, "future/level1/tick"),
     "OPTION": (OptionTickRecorder, "option/level1/tick"),
+    "STOCK_OPTION": (StockOptionTickRecorder, "stock_option/level1/tick"),
     # "STOCK": (StockL2Recorder, "stock/level2/tick"),   # 未来
 }
 
@@ -251,12 +257,48 @@ def build_ctp_config(asset_types: list) -> dict:
     }
 
 
+def build_ctp_stock_option_config() -> dict:
+    """构建 CTP 股票期权网关配置（独立柜台，openctp_ctpopt）"""
+    engine = get_db_engine()
+    exchanges = CTP_SUBSCRIBE_STOCK_OPTION_EXCHANGES
+
+    symbol_exchange_map = {}
+    subscribe_list = []
+
+    # 股票期权合约代码直接用 Tushare symbol（即 CTP InstrumentID），无需大小写转换
+    stock_option_repo = StockOptionInfoRepo(engine)
+    for ex in exchanges:
+        instruments = stock_option_repo.get_active_instruments(ex)
+        if instruments:
+            for symbol in instruments:
+                symbol_exchange_map[symbol] = ex
+            Logger.info(f"📌 [股票期权] {ex} 交易所加载了 {len(instruments)} 个活跃合约。")
+            subscribe_list.extend(instruments)
+
+    Logger.info(f"✅ 股票期权共加载 {len(subscribe_list)} 个待订阅合约")
+
+    # 加载期权元数据映射
+    option_meta_map = stock_option_repo.get_option_meta_map()
+    Logger.info(f"✅ 股票期权元数据加载完成，共 {len(option_meta_map)} 个合约")
+
+    return {
+        "front_address": CTP_STOCK_OPTION_MD_FRONT_ADDRESS,
+        "subscribe_list": subscribe_list,
+        "symbol_exchange_map": symbol_exchange_map,
+        "option_meta_map": option_meta_map,
+    }
+
+
 def main():
     args = parse_args()
 
     # 命令行参数覆盖 .env 配置
     enabled_gateways = _parse_csv(args.gateway, GATEWAYS, upper=False)
     asset_types = _parse_csv(args.assets, CTP_SUBSCRIBE_ASSET_TYPES)
+
+    # 自动启用股票期权网关：当 asset_types 包含 STOCK_OPTION 时，自动加入 ctp_stock_option 网关
+    if 'STOCK_OPTION' in asset_types and 'ctp_stock_option' not in enabled_gateways:
+        enabled_gateways.append('ctp_stock_option')
 
     # 单例锁名按服务组合区分，支持多实例并行（如 ctp+future 和 ctp+option 不互斥）
     lock_name = f"run_market_data_{'_'.join(enabled_gateways)}_{'_'.join(asset_types)}"
@@ -319,7 +361,13 @@ def main():
             continue
 
         if gw_name == "ctp":
-            config = build_ctp_config(asset_types)
+            # 期货网关只处理 FUTURE / OPTION（不含 STOCK_OPTION）
+            ctp_asset_types = [t for t in asset_types if t in ('FUTURE', 'OPTION')]
+            if not ctp_asset_types:
+                continue
+            config = build_ctp_config(ctp_asset_types)
+        elif gw_name == "ctp_stock_option":
+            config = build_ctp_stock_option_config()
         else:
             Logger.warning(f"⚠️ 网关 {gw_name} 的配置构建尚未实现，跳过。")
             continue

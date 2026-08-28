@@ -189,8 +189,13 @@ class BaseRecorder:
 
                 # ZMQ 广播（topic: TICK.{asset_type}.{product_id}）
                 # 提取品种代码：期货 IF2609→IF，期权 IO2603-C-3900→IO
-                m = re.match(r'^[A-Za-z]+', tick_obj.instrument_id)
-                product_id = m.group().upper() if m else tick_obj.instrument_id.upper()
+                # 股票期权 510050C2603M02500→510050（标的证券代码）
+                if self.asset_type == 'stock_option':
+                    m = re.match(r'^(\d{6})', tick_obj.instrument_id)
+                    product_id = m.group(1) if m else tick_obj.instrument_id.upper()
+                else:
+                    m = re.match(r'^[A-Za-z]+', tick_obj.instrument_id)
+                    product_id = m.group().upper() if m else tick_obj.instrument_id.upper()
                 topic = f"TICK.{self.asset_type.upper()}.{product_id}"
                 self.zmq_publisher.publish(topic, bin_data)
 

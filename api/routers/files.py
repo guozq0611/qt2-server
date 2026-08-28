@@ -20,6 +20,7 @@ router = APIRouter()
 RECORD_SIZE = {
     "future": 160,
     "option": 230,
+    "stock_option": 470,
 }
 
 
@@ -103,7 +104,7 @@ async def files_stats():
     """落盘文件统计（current + 所有历史目录）"""
     stats = {}
 
-    for asset_type in ["future", "option"]:
+    for asset_type in ["future", "option", "stock_option"]:
         base_dir = os.path.join(DATA_DIR, asset_type, "level1", "tick")
         if not os.path.isdir(base_dir):
             stats[asset_type] = {"file_count": 0, "total_size_mb": 0, "total_records": 0}

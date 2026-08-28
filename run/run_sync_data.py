@@ -2,14 +2,17 @@
 基础数据同步入口脚本
 
 用法:
-    # 同步全部基础数据（期货合约信息 + 期权合约信息 + 交易日历）
+    # 同步全部基础数据（期货合约信息 + 期权合约信息 + 股票期权合约信息 + 交易日历）
     python run/run_sync_data.py
 
     # 仅同步期货合约信息
     python run/run_sync_data.py --future-info
 
-    # 仅同步期权合约信息
+    # 仅同步期权合约信息（期货期权：股指期权 + 商品期权）
     python run/run_sync_data.py --option-info
+
+    # 仅同步股票期权合约信息（ETF 期权：SSE/SZSE）
+    python run/run_sync_data.py --stock-option-info
 
     # 仅同步交易日历
     python run/run_sync_data.py --trade-calendar --start 20250101 --end 20261231
@@ -31,7 +34,8 @@ from core.util.log_util import Logger
 def main():
     parser = argparse.ArgumentParser(description="qt2-server 基础数据同步")
     parser.add_argument('--future-info', action='store_true', help='同步期货合约信息')
-    parser.add_argument('--option-info', action='store_true', help='同步期权合约信息')
+    parser.add_argument('--option-info', action='store_true', help='同步期权合约信息（期货期权）')
+    parser.add_argument('--stock-option-info', action='store_true', help='同步股票期权合约信息（ETF 期权）')
     parser.add_argument('--trade-calendar', action='store_true', help='同步交易日历')
     parser.add_argument('--contract-type', type=str, default='1',
                         help='合约类型: 1=活跃(默认), 2=非活跃, 3=已退市')
@@ -40,7 +44,7 @@ def main():
     args = parser.parse_args()
 
     # 如果没有指定任何 flag，则同步全部
-    sync_all = not (args.future_info or args.option_info or args.trade_calendar)
+    sync_all = not (args.future_info or args.option_info or args.stock_option_info or args.trade_calendar)
 
     service = DataSyncService()
 
@@ -56,6 +60,12 @@ def main():
             Logger.info("同步期权合约信息 (option_info)")
             Logger.info("=" * 50)
             service.sync_option_info()
+
+        if sync_all or args.stock_option_info:
+            Logger.info("=" * 50)
+            Logger.info("同步股票期权合约信息 (stock_option_info)")
+            Logger.info("=" * 50)
+            service.sync_stock_option_info()
 
         if sync_all or args.trade_calendar:
             Logger.info("=" * 50)

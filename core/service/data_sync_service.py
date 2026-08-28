@@ -405,3 +405,122 @@ class DataSyncService:
                     Logger.info(f"已将 {result.rowcount} 个过期期权合约标记为失效")
         except Exception as e:
             Logger.error(f"清理过期期权合约失败: {e}")
+
+    # ==========================================================
+    # stock_option_info 同步（股票 ETF 期权，走 CTP 股票期权柜台）
+    # ==========================================================
+
+    STOCK_OPTION_EXCHANGES = ['SSE', 'SZSE']
+
+    def sync_stock_option_info(self) -> int:
+        """
+        同步股票期权合约信息到 stock_option_info 表
+        数据来源：Tushare opt_basic（exchange=SSE/SZSE）
+        :return: 写入记录数
+        """
+        Logger.info("开始同步股票期权合约信息...")
+
+        # 1. 拉取原始数据
+        raw_df = self.ts_wrapper.get_stock_option_info(exchanges=self.STOCK_OPTION_EXCHANGES)
+        if raw_df is None or raw_df.empty:
+            Logger.warning("Tushare 未返回股票期权合约数据")
+            return 0
+
+        Logger.info(f"从 Tushare 拉取到 {len(raw_df)} 条股票期权合约记录")
+
+        # 2. 数据清洗
+        clean_df = self._transform_stock_option_info(raw_df)
+        if clean_df.empty:
+            Logger.warning("清洗后无有效股票期权数据")
+            return 0
+
+        # 3. 写入数据库
+        count = self._upsert_stock_option_info(clean_df)
+        Logger.info(f"stock_option_info 同步完成，共 {count} 条记录")
+
+        # 4. 清理过期合约
+        self._clean_expired_stock_options()
+
+        return count
+
+    def _transform_stock_option_info(self, df: pd.DataFrame) -> pd.DataFrame:
+        """股票期权数据清洗：日期转换、状态推导、字段对齐"""
+        if df is None or df.empty:
+            return pd.DataFrame()
+
+        df = df.copy()
+
+        # 日期转换
+        for col in ['list_date', 'delist_date', 'expiry_date']:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], format='%Y%m%d', errors='coerce')
+                df[col] = df[col].apply(lambda x: x.date() if pd.notnull(x) else None)
+
+        # 交割月份格式化（4位→6位）
+        if 'delivery_month' in df.columns:
+            df['delivery_month'] = df['delivery_month'].apply(self._format_delivery_month)
+
+        # 状态推导
+        today = pd.Timestamp.today().date()
+        df['status'] = df['delist_date'].apply(
+            lambda x: 0 if pd.notnull(x) and x < today else 1
+        )
+
+        # 币种
+        df['currency'] = 'CNY'
+
+        # 选择入库字段
+        keep_cols = [
+            'instrument_id', 'exchange_id', 'instrument_name',
+            'underlying_symbol', 'contract_type', 'strike_price',
+            'multiplier', 'tick_size', 'delivery_month', 'expiry_date',
+            'list_date', 'delist_date', 'currency', 'status',
+        ]
+
+        available_cols = [c for c in keep_cols if c in df.columns]
+        df = df[available_cols]
+
+        return df
+
+    def _upsert_stock_option_info(self, df: pd.DataFrame, batch_size: int = 1000) -> int:
+        """批量写入 stock_option_info 表（ON DUPLICATE KEY UPDATE）"""
+        if df.empty:
+            return 0
+
+        columns = df.columns.tolist()
+        update_fields = ', '.join([
+            f"{col} = VALUES({col})" for col in columns
+            if col not in ('instrument_id', 'exchange_id')
+        ])
+
+        sql = f"""
+        INSERT INTO stock_option_info ({', '.join(columns)})
+        VALUES ({', '.join([f':{col}' for col in columns])})
+        ON DUPLICATE KEY UPDATE {update_fields}
+        """
+
+        records = df.to_dict('records')
+        total_rows = 0
+
+        with self.engine.begin() as conn:
+            for i in range(0, len(records), batch_size):
+                batch = records[i:i + batch_size]
+                result = conn.execute(text(sql), batch)
+                total_rows += result.rowcount
+
+        return total_rows
+
+    def _clean_expired_stock_options(self):
+        """将已过期的股票期权合约标记为失效"""
+        sql = """
+            UPDATE stock_option_info
+            SET status = 0
+            WHERE delist_date < CURDATE() AND status = 1
+        """
+        try:
+            with self.engine.begin() as conn:
+                result = conn.execute(text(sql))
+                if result.rowcount > 0:
+                    Logger.info(f"已将 {result.rowcount} 个过期股票期权合约标记为失效")
+        except Exception as e:
+            Logger.error(f"清理过期股票期权合约失败: {e}")

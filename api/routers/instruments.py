@@ -9,6 +9,7 @@ from fastapi import APIRouter, Query
 from core.util.db_util import get_db_engine
 from repository.instrument.future_info_repo import FutureInfoRepo, classify_future
 from repository.instrument.option_info_repo import OptionInfoRepo
+from repository.instrument.stock_option_info_repo import StockOptionInfoRepo
 from core.setting.setting import CTP_SUBSCRIBE_EXCHANGES
 
 
@@ -153,9 +154,66 @@ async def list_option_products():
     return {"count": len(product_list), "products": product_list}
 
 
+# ==========================================================
+# 股票期权（ETF 期权，SSE/SZSE，走 CTP 股票期权柜台）
+# ==========================================================
+
+def extract_stock_option_underlying(symbol: str) -> str:
+    """从股票期权合约代码提取标的证券代码
+    例: 510050C2603M02500 -> 510050
+    """
+    m = re.match(r'^(\d{6})', symbol)
+    return m.group(1) if m else ''
+
+
+@router.get("/stock-option")
+async def list_stock_option(
+    exchange: str = Query(None, description="交易所过滤: SSE / SZSE"),
+    underlying: str = Query(None, description="标的证券代码过滤, 如 510050"),
+    active_only: bool = Query(True, description="只返回活跃合约"),
+):
+    """股票期权合约列表（含标的/行权价/类型/到期日等详情）"""
+    engine = get_db_engine()
+    repo = StockOptionInfoRepo(engine)
+    instruments = repo.get_active_instruments_detail(exchange)
+
+    # 加标的代码
+    for inst in instruments:
+        inst['underlying_code'] = extract_stock_option_underlying(inst['symbol'])
+
+    # 按标的过滤
+    if underlying:
+        instruments = [i for i in instruments if i['underlying_code'] == underlying]
+
+    return {"count": len(instruments), "instruments": instruments}
+
+
+@router.get("/stock-option/underlyings")
+async def list_stock_option_underlyings():
+    """股票期权标的列表（用于过滤下拉框）"""
+    engine = get_db_engine()
+    repo = StockOptionInfoRepo(engine)
+    instruments = repo.get_active_instruments_detail()
+
+    underlyings = {}
+    for inst in instruments:
+        code = extract_stock_option_underlying(inst['symbol'])
+        if code not in underlyings:
+            underlyings[code] = {
+                "underlying": code,
+                "exchange": inst['exchange'],
+                "name": inst.get('underlying', '') or code,
+                "count": 0,
+            }
+        underlyings[code]["count"] += 1
+
+    underlying_list = sorted(underlyings.values(), key=lambda x: (x['exchange'], x['underlying']))
+    return {"count": len(underlying_list), "underlyings": underlying_list}
+
+
 @router.get("/summary")
 async def instruments_summary():
-    """合约数量汇总（含期货子分类 + 期权子分类）"""
+    """合约数量汇总（含期货子分类 + 期权子分类 + 股票期权）"""
     engine = get_db_engine()
     repo = FutureInfoRepo(engine)
     instruments = repo.get_active_instruments_detail()
@@ -165,6 +223,8 @@ async def instruments_summary():
         "future_by_type": {"STOCK_INDEX": 0, "BOND": 0, "COMMODITY": 0},
         "option": {},
         "option_by_type": {"INDEX_OPTION": 0, "COMMODITY_OPTION": 0, "STOCK_OPTION": 0},
+        "stock_option": {},
+        "stock_option_total": 0,
         "total": 0,
     }
 
@@ -183,5 +243,16 @@ async def instruments_summary():
             summary["total"] += option_count
         except Exception:
             summary["option"][ex] = 0
+
+    # 股票期权
+    try:
+        stock_option_repo = StockOptionInfoRepo(engine)
+        for ex in ['SSE', 'SZSE']:
+            count = len(stock_option_repo.get_active_instruments(ex) or [])
+            summary["stock_option"][ex] = count
+            summary["stock_option_total"] += count
+            summary["total"] += count
+    except Exception:
+        summary["stock_option"] = {"SSE": 0, "SZSE": 0}
 
     return summary

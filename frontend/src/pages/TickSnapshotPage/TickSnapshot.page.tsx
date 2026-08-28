@@ -24,6 +24,15 @@ interface TickData {
   type?: string; // 'C' / 'P'
   delta?: number;
   implied_vol?: number;
+  // 股票期权 5 档买卖盘
+  bid_price_2?: number;
+  bid_price_3?: number;
+  bid_price_4?: number;
+  bid_price_5?: number;
+  ask_price_2?: number;
+  ask_price_3?: number;
+  ask_price_4?: number;
+  ask_price_5?: number;
   [key: string]: any;
 }
 
@@ -89,10 +98,24 @@ interface OptionProductInfo {
   count: number;
 }
 
+interface StockOptionUnderlyingInfo {
+  underlying: string;
+  exchange: string;
+  name: string;
+  count: number;
+}
+
 // 从期权合约代码提取品种前缀（字母部分）
 const extractOptionProduct = (symbol: string): string => {
   const match = symbol.match(/^([a-zA-Z]+)/);
   return match ? match[1].toUpperCase() : '';
+};
+
+// 从股票期权合约代码提取标的证券代码（前6位数字）
+// 例: 510050C2603M02500 -> 510050
+const extractStockOptionUnderlying = (symbol: string): string => {
+  const match = symbol.match(/^(\d{6})/);
+  return match ? match[1] : '';
 };
 
 // 根据交易所判断期权分类
@@ -111,17 +134,19 @@ const TickSnapshotPage = () => {
   const [ticks, setTicks] = useState<TickData[]>([]);
   const [products, setProducts] = useState<ProductInfo[]>([]);
   const [optionProducts, setOptionProducts] = useState<OptionProductInfo[]>([]);
+  const [stockOptionUnderlyings, setStockOptionUnderlyings] = useState<StockOptionUnderlyingInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [count, setCount] = useState(0);
 
-  // 资产类型 tab: 'future' | 'option'
-  const [assetType, setAssetType] = useState<'future' | 'option'>('future');
+  // 资产类型 tab: 'future' | 'option' | 'stock_option'
+  const [assetType, setAssetType] = useState<'future' | 'option' | 'stock_option'>('future');
 
   // 过滤状态
   const [futureType, setFutureType] = useState<string>('ALL');
   const [selectedProduct, setSelectedProduct] = useState<string>('ALL');
   const [optionType, setOptionType] = useState<string>('ALL');
   const [selectedOptionProduct, setSelectedOptionProduct] = useState<string>('ALL');
+  const [selectedStockOptionUnderlying, setSelectedStockOptionUnderlying] = useState<string>('ALL');
   const [searchSymbol, setSearchSymbol] = useState<string>('');
 
   // 价格涨跌状态：symbol -> { direction, flash }
@@ -132,12 +157,14 @@ const TickSnapshotPage = () => {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const [futureResult, optionResult] = await Promise.all([
+        const [futureResult, optionResult, stockOptionResult] = await Promise.all([
           api.getFutureProducts(),
           api.getOptionProducts(),
+          api.getStockOptionUnderlyings(),
         ]);
         setProducts((futureResult as any).products || []);
         setOptionProducts((optionResult as any).products || []);
+        setStockOptionUnderlyings((stockOptionResult as any).underlyings || []);
       } catch (err) {
         console.error(err);
       }
@@ -152,6 +179,7 @@ const TickSnapshotPage = () => {
       if (assetType === 'option' && optionType !== 'ALL') params.option_type = optionType;
       if (assetType === 'future' && selectedProduct !== 'ALL') params.product_id = selectedProduct;
       if (assetType === 'option' && selectedOptionProduct !== 'ALL') params.product_id = selectedOptionProduct;
+      if (assetType === 'stock_option' && selectedStockOptionUnderlying !== 'ALL') params.product_id = selectedStockOptionUnderlying;
 
       const result = await api.getLatestTicks(assetType, 500, params);
       const newTicks = (result as any).ticks || [];
@@ -202,6 +230,7 @@ const TickSnapshotPage = () => {
     selectedProduct,
     optionType,
     selectedOptionProduct,
+    selectedStockOptionUnderlying,
   ]);
 
   // 从 ticks 自动更新 count
@@ -247,13 +276,15 @@ const TickSnapshotPage = () => {
 
     const hasFilter =
       (assetType === 'future' && (futureType !== 'ALL' || selectedProduct !== 'ALL')) ||
-      (assetType === 'option' && (optionType !== 'ALL' || selectedOptionProduct !== 'ALL'));
+      (assetType === 'option' && (optionType !== 'ALL' || selectedOptionProduct !== 'ALL')) ||
+      (assetType === 'stock_option' && selectedStockOptionUnderlying !== 'ALL');
 
     const params: { future_type?: string; option_type?: string; product_id?: string } = {};
     if (assetType === 'future' && futureType !== 'ALL') params.future_type = futureType;
     if (assetType === 'option' && optionType !== 'ALL') params.option_type = optionType;
     if (assetType === 'future' && selectedProduct !== 'ALL') params.product_id = selectedProduct;
     if (assetType === 'option' && selectedOptionProduct !== 'ALL') params.product_id = selectedOptionProduct;
+    if (assetType === 'stock_option' && selectedStockOptionUnderlying !== 'ALL') params.product_id = selectedStockOptionUnderlying;
 
     // 先 REST 从 Redis 加载快照
     fetchData();
@@ -318,7 +349,7 @@ const TickSnapshotPage = () => {
         clearInterval(interval);
       }
     };
-  }, [fetchData, assetType, futureType, selectedProduct, optionType, selectedOptionProduct]);
+  }, [fetchData, assetType, futureType, selectedProduct, optionType, selectedOptionProduct, selectedStockOptionUnderlying]);
 
   // 构建 symbol → future_type 映射
   const symbolTypeMap = useMemo(() => {
@@ -347,7 +378,7 @@ const TickSnapshotPage = () => {
           (t) => extractProduct(t.symbol) === selectedProduct,
         );
       }
-    } else {
+    } else if (assetType === 'option') {
       // 期权过滤
       if (optionType !== 'ALL') {
         result = result.filter((t) => {
@@ -360,13 +391,20 @@ const TickSnapshotPage = () => {
           (t) => extractOptionProduct(t.symbol) === selectedOptionProduct,
         );
       }
+    } else {
+      // 股票期权过滤
+      if (selectedStockOptionUnderlying !== 'ALL') {
+        result = result.filter(
+          (t) => extractStockOptionUnderlying(t.symbol) === selectedStockOptionUnderlying,
+        );
+      }
     }
     if (searchSymbol.trim()) {
       const q = searchSymbol.trim().toUpperCase();
       result = result.filter((t) => t.symbol.toUpperCase().includes(q));
     }
     return result;
-  }, [ticks, assetType, futureType, selectedProduct, optionType, selectedOptionProduct, searchSymbol, symbolTypeMap]);
+  }, [ticks, assetType, futureType, selectedProduct, optionType, selectedOptionProduct, selectedStockOptionUnderlying, searchSymbol, symbolTypeMap]);
 
   // 按品种过滤选项
   const productOptions = useMemo(() => {
@@ -413,7 +451,7 @@ const TickSnapshotPage = () => {
         </SubheaderLeft>
         <SubheaderRight>
           <div className='flex gap-2'>
-            {(['future', 'option'] as const).map((t) => (
+            {(['future', 'option', 'stock_option'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => {
@@ -422,19 +460,21 @@ const TickSnapshotPage = () => {
                   setSelectedProduct('ALL');
                   setOptionType('ALL');
                   setSelectedOptionProduct('ALL');
+                  setSelectedStockOptionUnderlying('ALL');
                   setSearchSymbol('');
                 }}
                 className={`rounded px-3 py-1 text-sm ${
                   assetType === t ? 'bg-blue-500 text-white' : 'bg-zinc-200 dark:bg-zinc-700'
                 }`}>
-                {t === 'future' ? '期货' : '期权'}
+                {t === 'future' ? '期货' : t === 'option' ? '期权' : '股票期权'}
               </button>
             ))}
             <span className='text-sm text-zinc-500'>
               {(assetType === 'future' &&
                 (futureType !== 'ALL' || selectedProduct !== 'ALL')) ||
               (assetType === 'option' &&
-                (optionType !== 'ALL' || selectedOptionProduct !== 'ALL'))
+                (optionType !== 'ALL' || selectedOptionProduct !== 'ALL')) ||
+              (assetType === 'stock_option' && selectedStockOptionUnderlying !== 'ALL')
                 ? 'WebSocket 实时推送'
                 : '每 1 秒轮询（全部）'}
             </span>
@@ -542,6 +582,23 @@ const TickSnapshotPage = () => {
                 </>
               )}
 
+              {assetType === 'stock_option' && (
+                <>
+                  {/* 股票期权标的过滤 */}
+                  <select
+                    value={selectedStockOptionUnderlying}
+                    onChange={(e) => setSelectedStockOptionUnderlying(e.target.value)}
+                    className='rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800'>
+                    <option value='ALL'>全部标的</option>
+                    {stockOptionUnderlyings.map((u) => (
+                      <option key={u.underlying} value={u.underlying}>
+                        {u.underlying} ({u.exchange}) - {u.count} 个合约
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
+
               {/* 合约搜索 */}
               <input
                 type='text'
@@ -577,6 +634,21 @@ const TickSnapshotPage = () => {
                       <th className='px-3 py-2 text-right'>卖一量</th>
                       <th className='px-3 py-2'>更新时间</th>
                     </>
+                  ) : assetType === 'stock_option' ? (
+                    <>
+                      <th className='px-3 py-2'>合约代码</th>
+                      <th className='px-3 py-2'>类型</th>
+                      <th className='px-3 py-2'>标的</th>
+                      <th className='px-3 py-2 text-right'>行权价</th>
+                      <th className='px-3 py-2 text-right'>最新价</th>
+                      <th className='px-3 py-2 text-right'>成交量</th>
+                      <th className='px-3 py-2 text-right'>持仓量</th>
+                      <th className='px-3 py-2 text-right'>买一价</th>
+                      <th className='px-3 py-2 text-right'>卖一价</th>
+                      <th className='px-3 py-2 text-right'>买五价</th>
+                      <th className='px-3 py-2 text-right'>卖五价</th>
+                      <th className='px-3 py-2'>更新时间</th>
+                    </>
                   ) : (
                     <>
                       <th className='px-3 py-2'>合约代码</th>
@@ -596,13 +668,13 @@ const TickSnapshotPage = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={10} className='py-8 text-center text-zinc-400'>
+                    <td colSpan={12} className='py-8 text-center text-zinc-400'>
                       加载中...
                     </td>
                   </tr>
                 ) : filteredTicks.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className='py-8 text-center text-zinc-400'>
+                    <td colSpan={12} className='py-8 text-center text-zinc-400'>
                       暂无行情数据（非交易时段或引擎未运行）
                     </td>
                   </tr>
@@ -653,7 +725,7 @@ const TickSnapshotPage = () => {
                         </tr>
                       );
                     }
-                    // 期权行
+                    // 期权行（期货期权 + 股票期权共用）
                     const ps = priceStates[tick.symbol];
                     const priceColor = getPriceColorClass(ps?.direction || 'same');
                     const flashClass = getFlashClass(ps);
@@ -690,6 +762,16 @@ const TickSnapshotPage = () => {
                         <td className='px-3 py-2 text-right font-mono'>
                           {formatPrice(tick.ask_price_1)}
                         </td>
+                        {assetType === 'stock_option' && (
+                          <>
+                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-400'>
+                              {formatPrice(tick.bid_price_5)}
+                            </td>
+                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-400'>
+                              {formatPrice(tick.ask_price_5)}
+                            </td>
+                          </>
+                        )}
                         <td className='px-3 py-2 font-mono text-xs text-zinc-500'>
                           {formatTime(tick.trade_date, tick.update_time)}
                         </td>

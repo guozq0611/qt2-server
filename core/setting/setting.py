@@ -38,6 +38,19 @@ CTP_SUBSCRIBE_ASSET_TYPES = _parse_list(
 )
 
 # ==========================================================
+# 2.1 CTP 股票期权行情配置（openctp_ctpopt，独立柜台）
+# ==========================================================
+# 股票期权走 CTP 股票期权柜台，与期货柜台是不同的前置地址和 API
+# 招商期货股票期权生产环境行情前置
+CTP_STOCK_OPTION_MD_FRONT_ADDRESS = os.getenv(
+    "CTP_STOCK_OPTION_MD_FRONT_ADDRESS", "tcp://180.166.65.115:61213"
+)
+CTP_SUBSCRIBE_STOCK_OPTION_EXCHANGES = _parse_list(
+    os.getenv("CTP_SUBSCRIBE_STOCK_OPTION_EXCHANGES", "SSE,SZSE"),
+    ["SSE", "SZSE"],
+)
+
+# ==========================================================
 # 3. 数据库（合约信息、交易日历）
 #    支持: mysql / postgres / ob(OceanBase, 兼容 MySQL 协议)
 # ==========================================================

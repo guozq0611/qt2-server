@@ -18,8 +18,8 @@ from core.setting.setting import CTP_SUBSCRIBE_ASSET_TYPES, ZMQ_BIND_URL, REDIS_
 
 router = APIRouter()
 
-# 支持的资产类型（从配置读取）
-ASSET_TYPES = [t.lower() for t in CTP_SUBSCRIBE_ASSET_TYPES]
+# 支持的资产类型（从配置读取 + 固定支持的股票期权）
+ASSET_TYPES = list({t.lower() for t in CTP_SUBSCRIBE_ASSET_TYPES} | {"stock_option"})
 
 
 @router.get("/overview")
@@ -57,6 +57,18 @@ async def overview():
 def _extract_product(symbol: str) -> str:
     m = re.match(r'^([a-zA-Z]+)', symbol)
     return m.group(1).upper() if m else ''
+
+
+def _extract_stock_option_underlying(symbol: str) -> str:
+    """从股票期权合约代码提取标的证券代码
+    例: 510050C2603M02500 -> 510050
+        510050P2603M02500 -> 510050
+        159919C2603M01500 -> 159919
+    """
+    # 股票期权格式: {underlying}{C/P}{expiry}{M}{strike}
+    # 标的是 6 位数字代码
+    m = re.match(r'^(\d{6})', symbol)
+    return m.group(1) if m else ''
 
 
 def _classify_option(exchange: str) -> str:
@@ -98,8 +110,13 @@ async def latest_ticks(
 
             # 品种过滤
             if filter_product:
-                if _extract_product(symbol) != filter_product:
-                    continue
+                if asset_type == 'stock_option':
+                    # 股票期权按标的证券代码过滤
+                    if _extract_stock_option_underlying(symbol) != filter_product:
+                        continue
+                else:
+                    if _extract_product(symbol) != filter_product:
+                        continue
 
             # 分类过滤
             if asset_type == 'future' and future_type:

@@ -1,11 +1,12 @@
 # qt2-server
 
-Multi-asset market data gateway: CTP futures/options, stock L2.
+Multi-asset market data gateway: CTP futures/options, stock ETF options, stock L2.
 
 ## 功能
 
 - **CTP 行情接收**：通过 CTP 接口接收国内期货交易所全市场行情（中金所/上期/大商/郑商/能源/广期）
 - **期权行情**：CTP 同一连接可同时接收期权行情（股指期权/商品期权）
+- **股票期权行情**：通过 CTP 股票期权柜台（openctp_ctpopt）接收股票 ETF 期权行情（上交所/深交所），推送 5 档买卖盘
 - **ZeroMQ 分发**：所有 tick 通过 ZMQ PUB/SUB 极速广播，下游可按 topic 订阅
 - **二进制落盘**：bin 格式极速落盘，对齐 ClickHouse Int64，下游可零拷贝消费
 - **Redis 监控**：系统健康指标 + 全市场最新行情快照，每 2 秒上报一次
@@ -40,8 +41,14 @@ python run/run_market_data.py --gateway ctp --assets future
 # CTP 期货+期权
 python run/run_market_data.py --gateway ctp --assets future,option
 
+# CTP 期货+期权+股票期权（股票期权自动启用 ctp_stock_option 网关）
+python run/run_market_data.py --gateway ctp --assets future,option,stock_option
+
 # 只跑 CTP 期权
 python run/run_market_data.py --gateway ctp --assets option
+
+# 只跑股票期权
+python run/run_market_data.py --assets stock_option
 
 # 查看帮助
 python run/run_market_data.py --help
@@ -68,7 +75,8 @@ python run/run_market_data.py --help
 │                     │    │                     │
 │  BaseMdGateway      │    │  BaseRecorder       │
 │   ├─ CtpMdGateway   │    │   ├─ FutureRecorder │
-│   └─ StockL2Gateway │    │   ├─ OptionRecorder │
+│   ├─ CtpStockOption │    │   ├─ OptionRecorder │
+│   └─ StockL2Gateway │    │   ├─ StockOptionRec │
 │                      │    │   └─ StockL2Recorder│
 └─────────┬───────────┘    └─────────┬───────────┘
           │                          │
@@ -94,6 +102,7 @@ TICK.{ASSET_TYPE}.{PRODUCT_ID}
 | `TICK.FUTURE.IF` | 期货 - 中金所股指 |
 | `TICK.FUTURE.CU` | 期货 - 上期所铜 |
 | `TICK.OPTION.IO` | 期权 - 中金所股指期权 |
+| `TICK.STOCK_OPTION.510050` | 股票期权 - 上证 50ETF 期权（按标的证券代码分组） |
 | `TICK.STOCK.000001` | 股票 - 平安银行 |
 
 ## Bin 落盘格式

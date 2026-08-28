@@ -20,6 +20,8 @@ _EXCHANGE_ID_TO_TS_POSTFIX = {
     'SHFE': 'SHF',
     'INE': 'INE',
     'GFEX': 'GFE',
+    'SSE': 'SH',
+    'SZSE': 'SZ',
 }
 
 _TS_POSTFIX_TO_EXCHANGE_ID = {
@@ -86,6 +88,7 @@ class TushareWrapper:
         exchange_case_rules = {
             'SHFE': str.lower, 'DCE': str.lower, 'INE': str.lower, 'GFEX': str.lower,
             'CFFEX': str.upper, 'CZCE': str.upper, 'ZCE': str.upper,
+            'SSE': str.upper, 'SZSE': str.upper,
         }
 
         def _cvt_id(row):
@@ -202,6 +205,62 @@ class TushareWrapper:
             'call_put': 'contract_type',         # 'C' 认购 / 'P' 认沽
             'exercise_price': 'strike_price',    # 行权价
             'opt_multiplier': 'multiplier',      # 合约单位（期权里叫 multiplier）
+            's_month': 'delivery_month',         # 结算月
+            'maturity_date': 'expiry_date',      # 到期日
+            'min_price_chg': 'tick_size',        # 最小价格波幅
+        })
+
+        # 剔除 Tushare 原始冗余字段
+        cols_to_drop = ['ts_code', 'symbol', 'exchange']
+        df = df.drop(columns=cols_to_drop, errors='ignore')
+
+        return df
+
+    def get_stock_option_info(self, exchanges: List[str] = None) -> pd.DataFrame:
+        """
+        获取股票 ETF 期权合约基础信息（Tushare opt_basic 接口，exchange=SSE/SZSE）
+        股票期权走 CTP 股票期权柜台（openctp_ctpopt），与期货期权是不同的 API。
+
+        :param exchanges: 交易所列表，默认 ['SSE', 'SZSE']
+        :return: DataFrame，包含 instrument_id, exchange_id, instrument_name,
+                 underlying_symbol, contract_type, strike_price, multiplier,
+                 tick_size, delivery_month, expiry_date, list_date, delist_date 等
+
+        注意：
+        - Tushare opt_basic 的 symbol 字段就是 CTP 股票期权柜台的 InstrumentID
+          例: 510050C2603M02500
+        - Tushare opt_basic 的 opt_code 字段是标的证券代码（如 510050），作为 underlying_symbol
+        """
+        if exchanges is None or len(exchanges) == 0:
+            exchanges = ['SSE', 'SZSE']
+
+        fetch_result = []
+        for exchange_id in exchanges:
+            try:
+                res = self.ts_pro.opt_basic(exchange=exchange_id)
+                if res is not None and not res.empty:
+                    fetch_result.append(res)
+            except Exception as e:
+                Logger.error(f"获取 {exchange_id} 股票期权基础信息失败: {e}")
+
+        if not fetch_result:
+            return pd.DataFrame()
+
+        df = pd.concat(fetch_result, ignore_index=True)
+
+        # 股票期权的 instrument_id 直接用 Tushare 的 symbol 字段（即 CTP InstrumentID）
+        # 不走 _standardize_ctp_symbol（那个是基于 ts_code 转换的）
+        df['instrument_id'] = df['symbol']
+        # exchange_id 直接用 Tushare 的 exchange 字段（SSE/SZSE）
+        df['exchange_id'] = df['exchange']
+
+        # 字段名标准化（与 get_option_info 对齐）
+        df = df.rename(columns={
+            'name': 'instrument_name',
+            'opt_code': 'underlying_symbol',    # 标的证券代码, 如 510050
+            'call_put': 'contract_type',         # 'C' 认购 / 'P' 认沽
+            'exercise_price': 'strike_price',    # 行权价
+            'opt_multiplier': 'multiplier',      # 合约单位
             's_month': 'delivery_month',         # 结算月
             'maturity_date': 'expiry_date',      # 到期日
             'min_price_chg': 'tick_size',        # 最小价格波幅

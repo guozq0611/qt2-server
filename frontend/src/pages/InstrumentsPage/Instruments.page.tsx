@@ -48,6 +48,8 @@ interface SummaryData {
   future_by_type: Record<string, number>;
   option: Record<string, number>;
   option_by_type: Record<string, number>;
+  stock_option: Record<string, number>;
+  stock_option_total: number;
   total: number;
 }
 
@@ -55,6 +57,29 @@ interface OptionProduct {
   product_id: string;
   exchange: string;
   option_type: string;
+  name: string;
+  count: number;
+}
+
+interface StockOptionInstrument {
+  symbol: string;
+  exchange: string;
+  name: string;
+  underlying: string;
+  contract_type: string; // 'C' / 'P'
+  strike_price: number;
+  multiplier: number;
+  tick_size: number;
+  delivery_month: number | null;
+  expiry_date: string | null;
+  list_date: string | null;
+  delist_date: string | null;
+  underlying_code: string;
+}
+
+interface StockOptionUnderlying {
+  underlying: string;
+  exchange: string;
   name: string;
   count: number;
 }
@@ -113,9 +138,10 @@ const exportCSV = (data: FutureInstrument[], filename: string) => {
 
 const InstrumentsPage = () => {
   const [summary, setSummary] = useState<SummaryData | null>(null);
-  const [instruments, setInstruments] = useState<FutureInstrument[] | OptionInstrument[]>([]);
+  const [instruments, setInstruments] = useState<FutureInstrument[] | OptionInstrument[] | StockOptionInstrument[]>([]);
   const [optionProducts, setOptionProducts] = useState<OptionProduct[]>([]);
-  const [tab, setTab] = useState<'summary' | 'future' | 'option'>('summary');
+  const [stockOptionUnderlyings, setStockOptionUnderlyings] = useState<StockOptionUnderlying[]>([]);
+  const [tab, setTab] = useState<'summary' | 'future' | 'option' | 'stock_option'>('summary');
   const [loading, setLoading] = useState(true);
 
   // 过滤
@@ -123,6 +149,7 @@ const InstrumentsPage = () => {
   const [exchange, setExchange] = useState<string>('ALL');
   const [optionType, setOptionType] = useState<string>('ALL');
   const [selectedOptionProduct, setSelectedOptionProduct] = useState<string>('ALL');
+  const [selectedStockOptionUnderlying, setSelectedStockOptionUnderlying] = useState<string>('ALL');
   const [searchText, setSearchText] = useState<string>('');
 
   useEffect(() => {
@@ -141,6 +168,13 @@ const InstrumentsPage = () => {
           ]);
           setInstruments((instrResult as any).instruments || []);
           setOptionProducts((prodResult as any).products || []);
+        } else if (tab === 'stock_option') {
+          const [instrResult, underlyingResult] = await Promise.all([
+            api.getStockOptionInstruments(),
+            api.getStockOptionUnderlyings(),
+          ]);
+          setInstruments((instrResult as any).instruments || []);
+          setStockOptionUnderlyings((underlyingResult as any).underlyings || []);
         }
       } catch (err) {
         console.error(err);
@@ -170,6 +204,11 @@ const InstrumentsPage = () => {
         result = result.filter((i) => i.product_id === selectedOptionProduct);
       }
     }
+    if (tab === 'stock_option') {
+      if (selectedStockOptionUnderlying !== 'ALL') {
+        result = result.filter((i) => (i as any).underlying_code === selectedStockOptionUnderlying);
+      }
+    }
     if (searchText.trim()) {
       const q = searchText.trim().toUpperCase();
       result = result.filter(
@@ -177,11 +216,12 @@ const InstrumentsPage = () => {
           i.symbol?.toUpperCase().includes(q) ||
           i.product_id?.toUpperCase().includes(q) ||
           i.underlying?.toUpperCase().includes(q) ||
+          (i as any).underlying_code?.toUpperCase().includes(q) ||
           (i.name || '').includes(searchText.trim()),
       );
     }
     return result;
-  }, [instruments, futureType, exchange, optionType, selectedOptionProduct, searchText, tab]);
+  }, [instruments, futureType, exchange, optionType, selectedOptionProduct, selectedStockOptionUnderlying, searchText, tab]);
 
   // 期权品种过滤选项（按分类过滤）
   const optionProductOptions = useMemo(() => {
@@ -202,19 +242,22 @@ const InstrumentsPage = () => {
         </SubheaderLeft>
         <SubheaderRight>
           <div className='flex gap-2'>
-            {(['summary', 'future', 'option'] as const).map((t) => (
+            {(['summary', 'future', 'option', 'stock_option'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => {
                   setTab(t);
                   setFutureType('ALL');
                   setExchange('ALL');
+                  setOptionType('ALL');
+                  setSelectedOptionProduct('ALL');
+                  setSelectedStockOptionUnderlying('ALL');
                   setSearchText('');
                 }}
                 className={`rounded px-3 py-1 text-sm ${
                   tab === t ? 'bg-blue-500 text-white' : 'bg-zinc-200 dark:bg-zinc-700'
                 }`}>
-                {t === 'summary' ? '汇总' : t === 'future' ? '期货' : '期权'}
+                {t === 'summary' ? '汇总' : t === 'future' ? '期货' : t === 'option' ? '期权' : '股票期权'}
               </button>
             ))}
           </div>
@@ -267,6 +310,28 @@ const InstrumentsPage = () => {
               ))}
             </div>
 
+            {/* 股票期权汇总卡片 */}
+            <div className='text-sm font-bold text-zinc-500'>股票期权（ETF 期权）</div>
+            <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
+              {['SSE', 'SZSE'].map((ex) => (
+                <Card key={ex}>
+                  <CardBody>
+                    <div className='flex items-center justify-between'>
+                      <div>
+                        <div className='text-sm text-zinc-500'>{ex === 'SSE' ? '上交所' : '深交所'}</div>
+                        <div className='text-2xl font-bold'>
+                          {summary.stock_option?.[ex] || 0}
+                        </div>
+                      </div>
+                      <Badge color='blue' colorIntensity='500'>
+                        {ex}
+                      </Badge>
+                    </div>
+                  </CardBody>
+                </Card>
+              ))}
+            </div>
+
             {/* 交易所汇总表 */}
             <Card>
               <CardBody>
@@ -277,17 +342,32 @@ const InstrumentsPage = () => {
                       <th className='py-2'>交易所</th>
                       <th className='py-2 text-right'>期货</th>
                       <th className='py-2 text-right'>期权</th>
+                      <th className='py-2 text-right'>股票期权</th>
                       <th className='py-2 text-right'>合计</th>
                     </tr>
                   </thead>
                   <tbody>
+                    {/* 期货交易所行 */}
                     {Object.keys(summary.future).map((ex) => (
                       <tr key={ex} className='border-b border-zinc-100 dark:border-zinc-800'>
                         <td className='py-2 font-bold'>{ex}</td>
                         <td className='py-2 text-right font-mono'>{summary.future[ex]}</td>
                         <td className='py-2 text-right font-mono'>{summary.option[ex] || 0}</td>
+                        <td className='py-2 text-right font-mono'>{summary.stock_option?.[ex] || 0}</td>
                         <td className='py-2 text-right font-mono font-bold text-blue-500'>
-                          {(summary.future[ex] || 0) + (summary.option[ex] || 0)}
+                          {(summary.future[ex] || 0) + (summary.option[ex] || 0) + (summary.stock_option?.[ex] || 0)}
+                        </td>
+                      </tr>
+                    ))}
+                    {/* 股票期权交易所行（如果不在期货列表中） */}
+                    {Object.keys(summary.stock_option || {}).filter((ex) => !summary.future[ex]).map((ex) => (
+                      <tr key={ex} className='border-b border-zinc-100 dark:border-zinc-800'>
+                        <td className='py-2 font-bold'>{ex}</td>
+                        <td className='py-2 text-right font-mono'>0</td>
+                        <td className='py-2 text-right font-mono'>0</td>
+                        <td className='py-2 text-right font-mono'>{summary.stock_option[ex] || 0}</td>
+                        <td className='py-2 text-right font-mono font-bold text-blue-500'>
+                          {summary.stock_option[ex] || 0}
                         </td>
                       </tr>
                     ))}
@@ -298,6 +378,9 @@ const InstrumentsPage = () => {
                       </td>
                       <td className='py-2 text-right font-mono'>
                         {Object.values(summary.option).reduce((a, b) => a + b, 0)}
+                      </td>
+                      <td className='py-2 text-right font-mono'>
+                        {summary.stock_option_total || 0}
                       </td>
                       <td className='py-2 text-right font-mono text-blue-500'>{summary.total}</td>
                     </tr>
@@ -432,6 +515,36 @@ const InstrumentsPage = () => {
                 </div>
               )}
 
+              {tab === 'stock_option' && (
+                <div className='flex flex-wrap items-center gap-3 border-b p-3'>
+                  {/* 标的过滤 */}
+                  <select
+                    value={selectedStockOptionUnderlying}
+                    onChange={(e) => setSelectedStockOptionUnderlying(e.target.value)}
+                    className='rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800'>
+                    <option value='ALL'>全部标的</option>
+                    {stockOptionUnderlyings.map((u) => (
+                      <option key={u.underlying} value={u.underlying}>
+                        {u.underlying} ({u.exchange}) - {u.count} 个合约
+                      </option>
+                    ))}
+                  </select>
+
+                  <input
+                    type='text'
+                    placeholder='搜索合约/标的/名称...'
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    className='rounded border border-zinc-300 bg-white px-3 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800'
+                  />
+                  <div className='ml-auto flex items-center gap-3'>
+                    <span className='text-sm text-zinc-500'>
+                      {filteredInstruments.length} 个合约
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* 表格 */}
               <div className='overflow-x-auto'>
                 <table className='w-full text-sm'>
@@ -450,6 +563,19 @@ const InstrumentsPage = () => {
                           <th className='px-3 py-2'>交割日</th>
                           <th className='px-3 py-2'>摘牌日</th>
                           <th className='px-3 py-2 text-right'>保证金率</th>
+                        </>
+                      ) : tab === 'stock_option' ? (
+                        <>
+                          <th className='px-3 py-2'>合约代码</th>
+                          <th className='px-3 py-2'>交易所</th>
+                          <th className='px-3 py-2'>名称</th>
+                          <th className='px-3 py-2'>类型</th>
+                          <th className='px-3 py-2'>标的</th>
+                          <th className='px-3 py-2 text-right'>行权价</th>
+                          <th className='px-3 py-2 text-right'>乘数</th>
+                          <th className='px-3 py-2 text-right'>最小变动</th>
+                          <th className='px-3 py-2'>到期日</th>
+                          <th className='px-3 py-2'>摘牌日</th>
                         </>
                       ) : (
                         <>
@@ -470,13 +596,13 @@ const InstrumentsPage = () => {
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={tab === 'future' ? 11 : 10} className='py-8 text-center text-zinc-400'>
+                        <td colSpan={10} className='py-8 text-center text-zinc-400'>
                           加载中...
                         </td>
                       </tr>
                     ) : filteredInstruments.length === 0 ? (
                       <tr>
-                        <td colSpan={tab === 'future' ? 11 : 10} className='py-8 text-center text-zinc-400'>
+                        <td colSpan={10} className='py-8 text-center text-zinc-400'>
                           暂无数据
                         </td>
                       </tr>
@@ -513,6 +639,27 @@ const InstrumentsPage = () => {
                               <td className='px-3 py-2 text-right font-mono'>
                                 {inst.margin_rate ? `${(inst.margin_rate * 100).toFixed(1)}%` : '-'}
                               </td>
+                            </>
+                          ) : tab === 'stock_option' ? (
+                            <>
+                              <td className='px-3 py-2 font-mono font-bold'>{inst.symbol}</td>
+                              <td className='px-3 py-2'>{inst.exchange}</td>
+                              <td className='px-3 py-2'>{inst.name || '-'}</td>
+                              <td className='px-3 py-2'>
+                                <span className={`rounded px-2 py-0.5 text-xs ${
+                                  inst.contract_type === 'C'
+                                    ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'
+                                    : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                                }`}>
+                                  {inst.contract_type === 'C' ? '认购' : '认沽'}
+                                </span>
+                              </td>
+                              <td className='px-3 py-2 font-mono text-xs'>{inst.underlying || inst.underlying_code || '-'}</td>
+                              <td className='px-3 py-2 text-right font-mono'>{inst.strike_price || '-'}</td>
+                              <td className='px-3 py-2 text-right font-mono'>{inst.multiplier || '-'}</td>
+                              <td className='px-3 py-2 text-right font-mono'>{inst.tick_size || '-'}</td>
+                              <td className='px-3 py-2 font-mono text-xs'>{inst.expiry_date || '-'}</td>
+                              <td className='px-3 py-2 font-mono text-xs'>{inst.delist_date || '-'}</td>
                             </>
                           ) : (
                             <>

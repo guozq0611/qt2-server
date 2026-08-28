@@ -52,6 +52,15 @@ def _extract_product(symbol: str) -> str:
     return m.group(1).upper() if m else ''
 
 
+def _extract_stock_option_underlying(symbol: str) -> str:
+    """从股票期权合约代码提取标的证券代码
+    例: 510050C2603M02500 -> 510050
+    """
+    import re
+    m = re.match(r'^(\d{6})', symbol)
+    return m.group(1) if m else ''
+
+
 def _start_zmq_subscriber():
     """在后台线程启动 ZMQ SUB，所有消息放入 asyncio 队列"""
     # 将 bind_url 里的通配符替换为本地回环，用于连接
