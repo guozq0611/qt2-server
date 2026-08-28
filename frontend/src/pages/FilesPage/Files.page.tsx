@@ -16,6 +16,7 @@ interface FileInfo {
 interface FilesStats {
   future: { file_count: number; total_size_mb: number; total_records: number };
   option: { file_count: number; total_size_mb: number; total_records: number };
+  stock_option: { file_count: number; total_size_mb: number; total_records: number };
 }
 
 interface DirectoryInfo {
@@ -105,17 +106,29 @@ const FilesPage = () => {
               }`}>
               期权
             </button>
+            <button
+              onClick={() => {
+                setAssetType('stock_option');
+                setSelectedDir('current');
+              }}
+              className={`rounded px-3 py-1 text-sm ${
+                assetType === 'stock_option' ? 'bg-blue-500 text-white' : 'bg-zinc-200 dark:bg-zinc-700'
+              }`}>
+              股票期权
+            </button>
           </div>
         </SubheaderRight>
       </Subheader>
       <Container>
         {/* 统计卡片 */}
         {stats && (
-          <div className='mb-4 grid grid-cols-1 gap-4 md:grid-cols-2'>
-            {(['future', 'option'] as const).map((type) => (
+          <div className='mb-4 grid grid-cols-1 gap-4 md:grid-cols-3'>
+            {(['future', 'option', 'stock_option'] as const).map((type) => {
+              const label = type === 'future' ? '期货' : type === 'option' ? '期权' : '股票期权';
+              return (
               <Card key={type}>
                 <CardBody>
-                  <div className='mb-2 text-lg font-bold uppercase'>{type}</div>
+                  <div className='mb-2 text-lg font-bold'>{label}</div>
                   <div className='grid grid-cols-3 gap-2 text-sm'>
                     <div>
                       <div className='text-zinc-500'>文件数</div>
@@ -136,7 +149,8 @@ const FilesPage = () => {
                   </div>
                 </CardBody>
               </Card>
-            ))}
+              );
+            })}
           </div>
         )}
 
