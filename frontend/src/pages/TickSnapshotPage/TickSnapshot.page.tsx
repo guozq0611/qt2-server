@@ -650,24 +650,8 @@ const TickSnapshotPage = () => {
                       <th className='px-3 py-2 text-right'>持仓量</th>
                       <th className='px-3 py-2 text-right'>买一价</th>
                       <th className='px-3 py-2 text-right'>买一量</th>
-                      <th className='px-3 py-2 text-right'>买二价</th>
-                      <th className='px-3 py-2 text-right'>买二量</th>
-                      <th className='px-3 py-2 text-right'>买三价</th>
-                      <th className='px-3 py-2 text-right'>买三量</th>
-                      <th className='px-3 py-2 text-right'>买四价</th>
-                      <th className='px-3 py-2 text-right'>买四量</th>
-                      <th className='px-3 py-2 text-right'>买五价</th>
-                      <th className='px-3 py-2 text-right'>买五量</th>
                       <th className='px-3 py-2 text-right'>卖一价</th>
                       <th className='px-3 py-2 text-right'>卖一量</th>
-                      <th className='px-3 py-2 text-right'>卖二价</th>
-                      <th className='px-3 py-2 text-right'>卖二量</th>
-                      <th className='px-3 py-2 text-right'>卖三价</th>
-                      <th className='px-3 py-2 text-right'>卖三量</th>
-                      <th className='px-3 py-2 text-right'>卖四价</th>
-                      <th className='px-3 py-2 text-right'>卖四量</th>
-                      <th className='px-3 py-2 text-right'>卖五价</th>
-                      <th className='px-3 py-2 text-right'>卖五量</th>
                       <th className='px-3 py-2'>更新时间</th>
                     </>
                   ) : (
@@ -783,70 +767,11 @@ const TickSnapshotPage = () => {
                         <td className='px-3 py-2 text-right font-mono'>
                           {tick.bid_volume_1 ?? '-'}
                         </td>
-                        {assetType === 'stock_option' ? (
-                          <>
-                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-500'>
-                              {formatPrice(tick.bid_price_2)}
-                            </td>
-                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-500'>
-                              {tick.bid_volume_2 ?? '-'}
-                            </td>
-                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-500'>
-                              {formatPrice(tick.bid_price_3)}
-                            </td>
-                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-500'>
-                              {tick.bid_volume_3 ?? '-'}
-                            </td>
-                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-500'>
-                              {formatPrice(tick.bid_price_4)}
-                            </td>
-                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-500'>
-                              {tick.bid_volume_4 ?? '-'}
-                            </td>
-                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-500'>
-                              {formatPrice(tick.bid_price_5)}
-                            </td>
-                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-500'>
-                              {tick.bid_volume_5 ?? '-'}
-                            </td>
-                            <td className='px-3 py-2 text-right font-mono'>
-                              {formatPrice(tick.ask_price_1)}
-                            </td>
-                            <td className='px-3 py-2 text-right font-mono'>
-                              {tick.ask_volume_1 ?? '-'}
-                            </td>
-                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-500'>
-                              {formatPrice(tick.ask_price_2)}
-                            </td>
-                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-500'>
-                              {tick.ask_volume_2 ?? '-'}
-                            </td>
-                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-500'>
-                              {formatPrice(tick.ask_price_3)}
-                            </td>
-                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-500'>
-                              {tick.ask_volume_3 ?? '-'}
-                            </td>
-                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-500'>
-                              {formatPrice(tick.ask_price_4)}
-                            </td>
-                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-500'>
-                              {tick.ask_volume_4 ?? '-'}
-                            </td>
-                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-500'>
-                              {formatPrice(tick.ask_price_5)}
-                            </td>
-                            <td className='px-3 py-2 text-right font-mono text-xs text-zinc-500'>
-                              {tick.ask_volume_5 ?? '-'}
-                            </td>
-                          </>
-                        ) : (
-                          <td className='px-3 py-2 text-right font-mono'>
-                            {formatPrice(tick.ask_price_1)}
-                          </td>
-                        )}
-                        <td className='px-3 py-2 font-mono text-xs text-zinc-500'>
-                          {formatTime(tick.trade_date, tick.update_time)}
+                        <td className='px-3 py-2 text-right font-mono'>
+                          {formatPrice(tick.ask_price_1)}
+                        </td>
+                        <td className='px-3 py-2 text-right font-mono'>
+                          {tick.ask_volume_1 ?? '-'}
                         </td>
                       </tr>
                     );
