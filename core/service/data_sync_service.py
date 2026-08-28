@@ -471,7 +471,7 @@ class DataSyncService:
 
         # 选择入库字段
         keep_cols = [
-            'instrument_id', 'exchange_id', 'instrument_name',
+            'instrument_id', 'ctp_code', 'exchange_id', 'instrument_name',
             'underlying_symbol', 'contract_type', 'strike_price',
             'multiplier', 'tick_size', 'delivery_month', 'expiry_date',
             'list_date', 'delist_date', 'currency', 'status',

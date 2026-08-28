@@ -227,9 +227,10 @@ class TushareWrapper:
                  tick_size, delivery_month, expiry_date, list_date, delist_date 等
 
         注意：
-        - Tushare opt_basic 的 symbol 字段就是 CTP 股票期权柜台的 InstrumentID
-          例: 510050C2603M02500
-        - Tushare opt_basic 的 opt_code 字段是标的证券代码（如 510050），作为 underlying_symbol
+        - instrument_id: 可读合约代码（Tushare symbol 字段），如 510050C2603M02500
+        - ctp_code: CTP 股票期权柜台订阅用的数字 InstrumentID（Tushare ts_code 数字部分），如 10011031
+          CTP 股票期权柜台只能用 ctp_code 订阅行情，不能用 instrument_id
+        - Tushare opt_basic 的 opt_code 字段是标的证券代码（如 OP510050.SH），提取 6 位数字作为 underlying_symbol
         """
         if exchanges is None or len(exchanges) == 0:
             exchanges = ['SSE', 'SZSE']
@@ -248,9 +249,12 @@ class TushareWrapper:
 
         df = pd.concat(fetch_result, ignore_index=True)
 
-        # 股票期权的 instrument_id 直接用 Tushare 的 symbol 字段（即 CTP InstrumentID）
-        # 不走 _standardize_ctp_symbol（那个是基于 ts_code 转换的）
+        # instrument_id: 可读合约代码（Tushare symbol 字段）
         df['instrument_id'] = df['symbol']
+        # ctp_code: CTP 股票期权柜台订阅用的数字 InstrumentID（Tushare ts_code 数字部分）
+        # 例: ts_code="10011031.SH" -> ctp_code="10011031"
+        import re as _re
+        df['ctp_code'] = df['ts_code'].str.extract(r'^(\d+)')[0]
         # exchange_id 直接用 Tushare 的 exchange 字段（SSE/SZSE）
         df['exchange_id'] = df['exchange']
 
@@ -268,7 +272,6 @@ class TushareWrapper:
 
         # 清洗 underlying_symbol：从 "OP510050.SH" 提取 "510050"
         # 也可以从 instrument_id 提取前 6 位数字（更可靠）
-        import re as _re
         def _extract_underlying(row):
             inst = str(row.get('instrument_id', ''))
             m = _re.match(r'^(\d{6})', inst)

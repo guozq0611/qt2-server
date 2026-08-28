@@ -12,9 +12,9 @@ class StockOptionTickRecorder(BaseRecorder):
     """
     股票期权 Level1 Tick 录制器
 
-    bin 格式（在期权 230 字节基础上扩展 5 档买卖盘，合计 470 字节/条）：
-    - 公共字段（同期货，160 字节）
-    - 期权专属字段（同期权，70 字节）
+    bin 格式（在期权基础上扩展 5 档买卖盘，合计 362 字节/条）：
+    - 公共字段（同期货，instrument_id 扩展为 20s）
+    - 期权专属字段（同期权）
     - 5 档买卖盘 2-5 档（8 个 price + 8 个 volume = 16 个 q = 128 字节）
     - 注意：1 档已在公共字段中
     """
@@ -22,8 +22,8 @@ class StockOptionTickRecorder(BaseRecorder):
     TICK_CLASS = StockOptionLevel1TickData
 
     FIELDS_SPEC = [
-        # --- 公共字段（同期货） ---
-        ('instrument_id',      '16s'),
+        # --- 公共字段（同期货，instrument_id 扩展为 20s 以容纳股票期权长代码） ---
+        ('instrument_id',      '20s'),
         ('exchange_id',         '8s'),
         ('trade_date',          'i'),
         ('action_date',         'i'),
@@ -87,7 +87,7 @@ class StockOptionTickRecorder(BaseRecorder):
 
     def _extract_pack_values(self, tick_obj: StockOptionLevel1TickData) -> tuple:
         return (
-            tick_obj.instrument_id.encode('utf-8')[:16],
+            tick_obj.instrument_id.encode('utf-8')[:20],
             tick_obj.exchange_id.encode('utf-8')[:8],
             tick_obj.trade_date,
             tick_obj.action_date,

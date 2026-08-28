@@ -22,7 +22,7 @@ class StockOptionInfoRepo:
         self.engine = engine
 
     def get_active_instruments(self, exchange_id: str = 'SSE') -> List[str]:
-        """从数据库获取指定交易所的所有活跃股票期权合约 ID"""
+        """从数据库获取指定交易所的所有活跃股票期权合约 ID（可读 instrument_id）"""
         sql = f"""
         SELECT instrument_id
         FROM {self.TABLE}
@@ -38,11 +38,63 @@ class StockOptionInfoRepo:
             # 表可能尚未创建
             return []
 
+    def get_active_ctp_codes(self, exchange_id: str = 'SSE') -> List[str]:
+        """从数据库获取指定交易所的所有活跃股票期权 CTP 订阅代码（数字格式）"""
+        sql = f"""
+        SELECT ctp_code
+        FROM {self.TABLE}
+        WHERE exchange_id = :exchange_id
+          AND status = 1
+          AND delist_date >= CURRENT_DATE
+        """
+        try:
+            with self.engine.connect() as conn:
+                result = conn.execute(text(sql), {"exchange_id": exchange_id})
+                return [row[0] for row in result]
+        except Exception:
+            return []
+
+    def get_ctp_code_to_instrument_map(self, exchange_id: str = None) -> Dict[str, str]:
+        """
+        获取 ctp_code -> instrument_id 的映射表
+        CTP 股票期权柜台推送的行情 InstrumentID 是数字格式（ctp_code），
+        需要映射回可读的 instrument_id 用于落盘和展示。
+        :param exchange_id: 交易所代码，None=全部交易所
+        :return: {ctp_code: instrument_id}
+        """
+        if exchange_id:
+            sql = f"""
+            SELECT ctp_code, instrument_id
+            FROM {self.TABLE}
+            WHERE exchange_id = :exchange_id
+              AND status = 1
+              AND delist_date >= CURRENT_DATE
+            """
+            params = {"exchange_id": exchange_id}
+        else:
+            sql = f"""
+            SELECT ctp_code, instrument_id
+            FROM {self.TABLE}
+            WHERE status = 1
+              AND delist_date >= CURRENT_DATE
+            """
+            params = {}
+
+        mapping = {}
+        try:
+            with self.engine.connect() as conn:
+                result = conn.execute(text(sql), params)
+                for row in result:
+                    mapping[row[0]] = row[1]
+        except Exception:
+            pass
+        return mapping
+
     def get_active_instruments_detail(self, exchange_id: str = None) -> List[dict]:
         """获取活跃股票期权合约详情（含标的/行权价/类型/到期日等）"""
         if exchange_id:
             sql = f"""
-            SELECT instrument_id, exchange_id, instrument_name, underlying_symbol,
+            SELECT instrument_id, ctp_code, exchange_id, instrument_name, underlying_symbol,
                    contract_type, strike_price, multiplier, tick_size,
                    delivery_month, expiry_date, list_date, delist_date
             FROM {self.TABLE}
@@ -54,7 +106,7 @@ class StockOptionInfoRepo:
             params = {"exchange_id": exchange_id}
         else:
             sql = f"""
-            SELECT instrument_id, exchange_id, instrument_name, underlying_symbol,
+            SELECT instrument_id, ctp_code, exchange_id, instrument_name, underlying_symbol,
                    contract_type, strike_price, multiplier, tick_size,
                    delivery_month, expiry_date, list_date, delist_date
             FROM {self.TABLE}
@@ -71,17 +123,18 @@ class StockOptionInfoRepo:
                 for row in rows:
                     result_list.append({
                         "symbol": row[0],
-                        "exchange": row[1],
-                        "name": row[2],
-                        "underlying": row[3],
-                        "contract_type": row[4],
-                        "strike_price": float(row[5]) if row[5] else 0,
-                        "multiplier": float(row[6]) if row[6] else 1,
-                        "tick_size": float(row[7]) if row[7] else 0,
-                        "delivery_month": row[8],
-                        "expiry_date": str(row[9]) if row[9] else None,
-                        "list_date": str(row[10]) if row[10] else None,
-                        "delist_date": str(row[11]) if row[11] else None,
+                        "ctp_code": row[1],
+                        "exchange": row[2],
+                        "name": row[3],
+                        "underlying": row[4],
+                        "contract_type": row[5],
+                        "strike_price": float(row[6]) if row[6] else 0,
+                        "multiplier": float(row[7]) if row[7] else 1,
+                        "tick_size": float(row[8]) if row[8] else 0,
+                        "delivery_month": row[9],
+                        "expiry_date": str(row[10]) if row[10] else None,
+                        "list_date": str(row[11]) if row[11] else None,
+                        "delist_date": str(row[12]) if row[12] else None,
                     })
         except Exception:
             pass

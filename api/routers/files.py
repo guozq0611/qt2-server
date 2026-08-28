@@ -20,7 +20,7 @@ router = APIRouter()
 RECORD_SIZE = {
     "future": 160,
     "option": 230,
-    "stock_option": 470,
+    "stock_option": 362,
 }
 
 

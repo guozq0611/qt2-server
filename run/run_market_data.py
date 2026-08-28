@@ -263,17 +263,24 @@ def build_ctp_stock_option_config() -> dict:
     exchanges = CTP_SUBSCRIBE_STOCK_OPTION_EXCHANGES
 
     symbol_exchange_map = {}
-    subscribe_list = []
+    subscribe_list = []          # CTP 订阅用 ctp_code（数字格式）
+    ctp_code_to_instrument = {}  # ctp_code -> instrument_id 反向映射
 
-    # 股票期权合约代码直接用 Tushare symbol（即 CTP InstrumentID），无需大小写转换
+    # CTP 股票期权柜台使用数字格式的 InstrumentID（ctp_code）订阅行情，
+    # 而非可读的 instrument_id（Tushare symbol）。
     stock_option_repo = StockOptionInfoRepo(engine)
     for ex in exchanges:
-        instruments = stock_option_repo.get_active_instruments(ex)
-        if instruments:
-            for symbol in instruments:
-                symbol_exchange_map[symbol] = ex
-            Logger.info(f"📌 [股票期权] {ex} 交易所加载了 {len(instruments)} 个活跃合约。")
-            subscribe_list.extend(instruments)
+        details = stock_option_repo.get_active_instruments_detail(ex)
+        if details:
+            for d in details:
+                instrument_id = d["symbol"]
+                ctp_code = d.get("ctp_code")
+                if not ctp_code:
+                    continue
+                symbol_exchange_map[instrument_id] = ex
+                subscribe_list.append(ctp_code)
+                ctp_code_to_instrument[ctp_code] = instrument_id
+            Logger.info(f"📌 [股票期权] {ex} 交易所加载了 {len(details)} 个活跃合约。")
 
     Logger.info(f"✅ 股票期权共加载 {len(subscribe_list)} 个待订阅合约")
 
@@ -286,6 +293,7 @@ def build_ctp_stock_option_config() -> dict:
         "subscribe_list": subscribe_list,
         "symbol_exchange_map": symbol_exchange_map,
         "option_meta_map": option_meta_map,
+        "ctp_code_to_instrument": ctp_code_to_instrument,
     }
 
 

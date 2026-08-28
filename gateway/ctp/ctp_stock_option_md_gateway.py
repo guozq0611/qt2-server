@@ -31,6 +31,8 @@ class CtpStockOptionMdGateway(BaseMdGateway, mdapi.CThostFtdcMdSpi):
         self.symbol_exchange_map = self.config.get("symbol_exchange_map", {})
         # 期权元数据映射：instrument_id -> {underlying_symbol, strike_price, contract_type, expiry_date}
         self.option_meta_map = self.config.get("option_meta_map", {})
+        # ctp_code -> instrument_id 反向映射（CTP 股票期权柜台推送的 InstrumentID 是数字格式）
+        self.ctp_code_to_instrument = self.config.get("ctp_code_to_instrument", {})
 
     def connect(self):
         """外部调用：发起连接"""
@@ -140,7 +142,12 @@ class CtpStockOptionMdGateway(BaseMdGateway, mdapi.CThostFtdcMdSpi):
         # 兼容处理：如果是 bytes 就解码为 str，并去除末尾空字节/空格
         if isinstance(raw_instrument_id, bytes):
             raw_instrument_id = raw_instrument_id.decode('gbk')
-        instrument_id = raw_instrument_id.split('\x00')[0].strip()
+        ctp_code = raw_instrument_id.split('\x00')[0].strip()
+
+        # CTP 股票期权柜台推送的 InstrumentID 是数字格式（ctp_code，如 10011031），
+        # 需要映射回可读的 instrument_id（如 588000C2609M01750）用于落盘和展示。
+        # 标的 ETF（如 510050）没有 ctp_code 映射，直接用原始代码。
+        instrument_id = self.ctp_code_to_instrument.get(ctp_code, ctp_code)
 
         # 3. 安全取价（CTP 用 1e30 表示空值）
         def _safe_price(v):

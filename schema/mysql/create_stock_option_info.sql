@@ -6,13 +6,15 @@
 --
 -- 说明:
 --   - 数据来源: Tushare opt_basic 接口（exchange=SSE/SZSE）
---   - 合约代码: 使用 CTP 股票期权柜台的 InstrumentID（与 Tushare symbol 字段一致）
---     例: 510050C2603M02500（上证 50ETF 认购，2026年3月到期，行权价 2.500）
+--   - instrument_id: 可读合约代码（Tushare symbol 字段），如 510050C2603M02500
+--   - ctp_code: CTP 股票期权柜台订阅用的数字 InstrumentID（Tushare ts_code 数字部分），如 10011031
+--     注意：CTP 股票期权柜台只能用 ctp_code 订阅行情，不能用 instrument_id
 
 USE xquant;
 
 CREATE TABLE IF NOT EXISTS stock_option_info (
-  instrument_id varchar(30) NOT NULL COMMENT '期权合约代码, 如 510050C2603M02500',
+  instrument_id varchar(30) NOT NULL COMMENT '可读合约代码, 如 510050C2603M02500',
+  ctp_code varchar(20) NOT NULL COMMENT 'CTP柜台订阅代码, 如 10011031 (Tushare ts_code 数字部分)',
   exchange_id enum('SSE','SZSE') NOT NULL COMMENT '交易所',
 
   instrument_name varchar(80) NOT NULL COMMENT '合约名称',
@@ -33,6 +35,7 @@ CREATE TABLE IF NOT EXISTS stock_option_info (
   updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
   PRIMARY KEY (instrument_id, exchange_id),
+  UNIQUE KEY uk_ctp_code (ctp_code, exchange_id),
   INDEX idx_underlying (underlying_symbol),
   INDEX idx_product_status (contract_type, status),
   INDEX idx_expiry (expiry_date),

@@ -90,8 +90,9 @@ def _start_zmq_subscriber():
                     continue
                 asset_type = parts[1].upper()
                 product_id = parts[2].upper()
-                # 二进制前 16 字节是 instrument_id
-                symbol = raw_bytes[:16].split(b'\x00')[0].decode('utf-8', errors='replace')
+                # 二进制 instrument_id 字段长度：股票期权 20s，其他 16s
+                id_len = 20 if asset_type == 'STOCK_OPTION' else 16
+                symbol = raw_bytes[:id_len].split(b'\x00')[0].decode('utf-8', errors='replace')
                 if _loop is not None:
                     _loop.call_soon_threadsafe(_queue.put_nowait, (asset_type, product_id, symbol))
             except Exception as e:
