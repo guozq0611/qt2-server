@@ -257,7 +257,7 @@ class TushareWrapper:
         # 字段名标准化（与 get_option_info 对齐）
         df = df.rename(columns={
             'name': 'instrument_name',
-            'opt_code': 'underlying_symbol',    # 标的证券代码, 如 510050
+            'opt_code': 'underlying_symbol_raw',  # 原始格式: OP510050.SH
             'call_put': 'contract_type',         # 'C' 认购 / 'P' 认沽
             'exercise_price': 'strike_price',    # 行权价
             'opt_multiplier': 'multiplier',      # 合约单位
@@ -265,6 +265,21 @@ class TushareWrapper:
             'maturity_date': 'expiry_date',      # 到期日
             'min_price_chg': 'tick_size',        # 最小价格波幅
         })
+
+        # 清洗 underlying_symbol：从 "OP510050.SH" 提取 "510050"
+        # 也可以从 instrument_id 提取前 6 位数字（更可靠）
+        import re as _re
+        def _extract_underlying(row):
+            inst = str(row.get('instrument_id', ''))
+            m = _re.match(r'^(\d{6})', inst)
+            if m:
+                return m.group(1)
+            # 回退：从 opt_code 提取
+            raw = str(row.get('underlying_symbol_raw', ''))
+            m = _re.match(r'^[A-Za-z]*(\d{6})', raw)
+            return m.group(1) if m else raw
+        df['underlying_symbol'] = df.apply(_extract_underlying, axis=1)
+        df = df.drop(columns=['underlying_symbol_raw'], errors='ignore')
 
         # 剔除 Tushare 原始冗余字段
         cols_to_drop = ['ts_code', 'symbol', 'exchange']
