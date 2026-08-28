@@ -420,7 +420,12 @@ const TickSnapshotPage = () => {
 
   const formatPrice = (v?: number) => {
     if (v === undefined || v === null) return '-';
-    return (v / 10000).toFixed(2);
+    // API 返回的已经是浮点数（后端 Redis 快照已除以 M=10000）
+    // 按价格量级自适应小数位数
+    if (v >= 100) return v.toFixed(2);
+    if (v >= 1) return v.toFixed(3);
+    if (v > 0) return v.toFixed(4);
+    return '0';
   };
 
   // 最新价颜色：红涨绿跌
@@ -745,7 +750,7 @@ const TickSnapshotPage = () => {
                         </td>
                         <td className='px-3 py-2 font-mono text-xs'>{tick.underlying || '-'}</td>
                         <td className='px-3 py-2 text-right font-mono'>
-                          {tick.strike ? (tick.strike / 10000).toFixed(2) : '-'}
+                          {tick.strike != null ? tick.strike.toFixed(3) : '-'}
                         </td>
                         <td className={`px-3 py-2 text-right font-mono ${priceColor} ${flashClass} transition-colors duration-500`}>
                           {formatPrice(tick.last_price)}
