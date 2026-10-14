@@ -203,6 +203,20 @@ def get_ctp_instruments(asset_types: list) -> tuple:
     return symbol_exchange_map, symbol_asset_type_map, list(symbol_exchange_map.keys())
 
 
+def _compress_czce_future(symbol: str) -> str:
+    """郑商所期货合约：CTP 用 3 位月份（AP2610 -> AP610），其余交易所 4 位不变。
+
+    仅作用于期货。郑商所期权在库内已是 CTP 格式（如 AP612C6300），不可再压缩。
+    """
+    i = 0
+    while i < len(symbol) and symbol[i].isalpha():
+        i += 1
+    digits = symbol[i:]
+    if len(digits) == 4 and digits.isdigit():
+        return symbol[:i] + digits[1:]
+    return symbol
+
+
 def build_ctp_config(asset_types: list) -> dict:
     """构建 CTP 网关配置"""
     symbol_exchange_map, symbol_asset_type_map, subscribe_list = get_ctp_instruments(asset_types)
@@ -221,6 +235,10 @@ def build_ctp_config(asset_types: list) -> dict:
     cleaned_symbol_exchange_map = {}
     cleaned_symbol_asset_type_map = {}
     cleaned_subscribe_list = []
+    # CTP 合约代码 -> 库内 instrument_id 反向映射。
+    # 郑商所期货订阅码被压缩为 3 位月份（AP2610 -> AP610），而 CTP 推送的
+    # InstrumentID 也是 3 位，网关据此还原为库内 4 位代码落盘。
+    ctp_to_instrument = {}
 
     for symbol in subscribe_list:
         exchange = symbol_exchange_map[symbol]
@@ -228,9 +246,14 @@ def build_ctp_config(asset_types: list) -> dict:
         format_func = exchange_case_rules.get(exchange.upper(), lambda x: x)
         ctp_symbol = format_func(symbol)
 
+        # 郑商所期货：库内 4 位月份，CTP 要求 3 位（AP2610 -> AP610）
+        if exchange.upper() == 'CZCE' and asset_type == 'FUTURE':
+            ctp_symbol = _compress_czce_future(ctp_symbol)
+
         cleaned_symbol_exchange_map[ctp_symbol] = exchange
         cleaned_symbol_asset_type_map[ctp_symbol] = asset_type
         cleaned_subscribe_list.append(ctp_symbol)
+        ctp_to_instrument[ctp_symbol] = symbol
 
     Logger.info(f"✅ 合约清洗完成，共生成 {len(cleaned_subscribe_list)} 个 CTP 标准订阅代码")
 
@@ -252,6 +275,7 @@ def build_ctp_config(asset_types: list) -> dict:
         "front_address": CTP_MD_FRONT_ADDRESS,
         "subscribe_list": cleaned_subscribe_list,
         "symbol_exchange_map": cleaned_symbol_exchange_map,
+        "ctp_to_instrument": ctp_to_instrument,
         "symbol_asset_type_map": cleaned_symbol_asset_type_map,
         "option_meta_map": option_meta_map,
     }

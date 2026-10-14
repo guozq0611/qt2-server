@@ -37,6 +37,10 @@ class CtpMdGateway(BaseMdGateway, mdapi.CThostFtdcMdSpi):
         # 期权元数据映射：instrument_id -> {underlying_symbol, strike_price, contract_type, expiry_date}
         # 用于填充 OptionLevel1TickData 的期权专属字段
         self.option_meta_map = self.config.get("option_meta_map", {})
+        # CTP 订阅码 -> 库内 instrument_id 反向映射。
+        # 郑商所期货订阅码为 3 位月份（AP610），CTP 推送的 InstrumentID 也是 3 位，
+        # 落盘前还原为库内 4 位代码（AP2610），与其他交易所口径一致。
+        self.ctp_to_instrument = self.config.get("ctp_to_instrument", {})
 
     def connect(self):
         """外部调用：发起连接"""
@@ -112,6 +116,25 @@ class CtpMdGateway(BaseMdGateway, mdapi.CThostFtdcMdSpi):
         self.subscribed_symbols.update(symbols)
         logging.info(f"发送订阅请求，合约数量: {len(symbols)}")
 
+    def OnRspSubMarketData(self, pSpecificInstrument, pRspInfo, nRequestID, bIsLast) -> "void":
+        """回调：订阅应答。订阅失败（如合约代码格式不符）会在此显式暴露。"""
+        if pRspInfo is not None and pRspInfo.ErrorID != 0:
+            instrument = ""
+            if pSpecificInstrument is not None:
+                raw = pSpecificInstrument.InstrumentID
+                if isinstance(raw, bytes):
+                    raw = raw.decode('gbk')
+                instrument = raw.split('\x00')[0].strip()
+            logging.error(
+                f"❌ 订阅失败 [{instrument}] ErrorID={pRspInfo.ErrorID} "
+                f"ErrorMsg={pRspInfo.ErrorMsg}"
+            )
+
+    def OnRspError(self, pRspInfo, nRequestID, bIsLast) -> "void":
+        """回调：请求错误。"""
+        if pRspInfo is not None and pRspInfo.ErrorID != 0:
+            logging.error(f"❌ 请求错误 ErrorID={pRspInfo.ErrorID} ErrorMsg={pRspInfo.ErrorMsg}")
+
     def OnRtnDepthMarketData(self, pDepthMarketData) -> "void":
         """
         回调：核心行情推送 (Tick 数据到达)
@@ -145,7 +168,9 @@ class CtpMdGateway(BaseMdGateway, mdapi.CThostFtdcMdSpi):
         # 兼容处理：如果是 bytes 就解码为 str，并去除末尾空字节/空格
         if isinstance(raw_instrument_id, bytes):
             raw_instrument_id = raw_instrument_id.decode('gbk')
-        instrument_id = raw_instrument_id.split('\x00')[0].strip()
+        ctp_instrument_id = raw_instrument_id.split('\x00')[0].strip()
+        # 还原为库内 instrument_id（郑商所期货 3 位月份 -> 4 位）
+        instrument_id = self.ctp_to_instrument.get(ctp_instrument_id, ctp_instrument_id)
 
         # 3. 公共字段（期货和期权共享）
         common_fields = dict(
