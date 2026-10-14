@@ -175,7 +175,7 @@ class CtpMdGateway(BaseMdGateway, mdapi.CThostFtdcMdSpi):
         # 3. 公共字段（期货和期权共享）
         common_fields = dict(
             instrument_id=instrument_id,
-            exchange_id=self.symbol_exchange_map.get(instrument_id, ""),
+            exchange_id=self.symbol_exchange_map.get(ctp_instrument_id, ""),
 
             trade_date=trade_date_val,
             action_date=action_date_val,
